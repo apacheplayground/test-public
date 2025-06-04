@@ -17,6 +17,10 @@ jobs:
   cicd-non-admin-1:
     if: ${{ github.actor != 'ronfontebo' }}
     runs-on: ubuntu-latest
+    permissions:
+      id-token: write                                           # This is required for requesting the JWT (OIDC)
+      contents: write
+      pull-requests: write
     steps:
       - name: Configure AWS credentials
         id: configure-aws-credentials
