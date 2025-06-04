@@ -1,14 +1,14 @@
-name: CICD Admin                                              # Configure AWS creds
-                                                              # Pull sensitive variables from AWS SSM Parameter Store 
-on:                                                           # Checkout repo 
-  push:                                                       # Open PR in main branch
-    branches:                                                 # Merge PR
-    - dev                                                     # Update CHANGELOG
-                                                              # Update README
-env:                                                          # Commit & push updates
-  BRANCH: dev                                                 # Tag & push next version
-  AWS_REGION: us-east-1                                       # Notfiy Slack channel                                         
-
+name: CICD Admin                                                          # Configure AWS creds
+                                                                          # Pull sensitive variables from AWS SSM Parameter Store 
+on:                                                                       # Checkout repo
+  push:                                                                   # Open PR in main branch (as GHA bot)
+    branches:                                                             # Login to GH CLI        (as repo admin)
+     - dev                                                                # Merge PR               (as repo admin)
+                                                                          # Update CHANGELOG
+env:                                                                      # Update README
+  BRANCH: dev                                                             # Commit & push updates
+  AWS_REGION: us-east-1                                                   # Tag & push next version
+                                                                          # Notfiy Slack channel                                         
   GH_ADMIN_USER_NAME_PARAMETER: AP_GH_ADMIN_USER_NAME 
   GH_ADMIN_USER_EMAIL_PARAMETER: AP_GH_ADMIN_USER_EMAIL
   GH_ADMIN_TOKEN_PARAMETER: AP_GH_ADMIN_TOKEN
@@ -20,7 +20,7 @@ jobs:
     if: ${{ github.actor == 'ronfontebo' }}
     runs-on: ubuntu-latest
     permissions:
-      id-token: write                                           # This is required for requesting the JWT (OIDC)
+      id-token: write                                                     # This is required for requesting the JWT (OIDC)
       contents: write
       pull-requests: write
     steps:
@@ -216,15 +216,11 @@ jobs:
           echo "COMMIT_MESSAGE_2=${{ env.COMMIT_MESSAGE_1 }}" >> $GITHUB_ENV
           echo "COMMIT_MESSAGE_3=$(echo \"${{ env.COMMIT_MESSAGE_1 }}\")" >> $GITHUB_ENV
 
-      - name: Authenticate GitHub CLI
-        id: authenticate-github-cli
-        if: ${{ steps.get-commit-message-2-and-3.outcome == 'success' }}
-        run: |
-          echo ${{ env.GH_ADMIN_TOKEN }} | gh auth login --with-token
-
       - name: Open PR
         id: open-pr
-        if: ${{ steps.authenticate-github-cli.outcome == 'success' }}
+        if: ${{ steps.get-commit-message-2-and-3.outcome == 'success' }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}        
         run: |
           gh pr create \
             --head "${{ env.BRANCH }}" \
@@ -232,6 +228,12 @@ jobs:
             --title ${{ env.COMMIT_MESSAGE_1 }} \
             --body ${{ env.COMMIT_MESSAGE_1 }}
           
+      - name: Authenticate GitHub CLI
+        id: authenticate-github-cli
+        if: ${{ steps.open-pr.outcome == 'success' }}
+        run: |
+          echo ${{ env.GH_ADMIN_TOKEN }} | gh auth login --with-token
+
       - name: Merge PR
         id: merge-pr
         if: ${{ steps.open-pr.outcome == 'success' }}
