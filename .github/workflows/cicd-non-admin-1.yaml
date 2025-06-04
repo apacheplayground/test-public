@@ -1,16 +1,15 @@
-name: CICD Non-admin 1                                          # Configure AWS creds
-                                                                # Pull sensitive variables from AWS SSM Parameter Store 
-on:                                                             # Checkout repo                                                             
-  push:                                                         # Open PR in main branch 
-    branches:                                                   # Send PR URL to Slack channel / Notify if failure
-      - dev
+name: CICD Non-admin 1                                                    # Configure AWS creds
+                                                                          # Pull sensitive variables from AWS SSM Parameter Store 
+on:                                                                       # Checkout repo
+  push:                                                                   # Open PR in main branch (as GHA bot)
+    branches:                                                             # Send PR URL to Slack channel / Notify if failure
+      - dev                                                               
 
 env:
   BRANCH: dev
   AWS_REGION: us-east-1
 
   GH_ADMIN_USER_NAME_PARAMETER: AP_GH_ADMIN_USER_NAME
-  GH_ADMIN_TOKEN_PARAMETER: AP_GH_ADMIN_TOKEN
   SLACK_GHA_NOTIFY_BOT_TOKEN_PARAMETER: AP_SLACK_GHA_NOTIFY_BOT_TOKEN
   SLACK_CHANNEL_ID: ${{ secrets.REPO_SLACK_CHANNEL_ID }}
 
@@ -19,7 +18,7 @@ jobs:
     if: ${{ github.actor != 'ronfontebo' }}
     runs-on: ubuntu-latest
     permissions:
-      id-token: write                                           # This is required for requesting the JWT (OIDC)
+      id-token: write                                                     # This is required for requesting the JWT (OIDC)
       contents: write
       pull-requests: write
     steps:
@@ -70,49 +69,9 @@ jobs:
             --with-decryption \
             --output text)" >> $GITHUB_ENV
 
-      - name: Check for GH_ADMIN_TOKEN in AWS SSM Parameter Store
-        id: check-gh-admin-token
-        if: ${{ steps.get-gh-admin-user-name.outcome == 'success' }}
-        run: |
-          aws ssm get-parameter \
-            --region "${{ env.AWS_REGION }}" \
-            --name "${{ env.GH_ADMIN_TOKEN_PARAMETER }}" \
-            --query "Parameter.Value" \
-            --no-with-decryption \
-            --output text
-
-          GH_ADMIN_TOKEN_FOUND=$?
-
-          if [[ $GH_ADMIN_TOKEN_FOUND == '0' ]];
-          then
-            echo "GH_ADMIN_TOKEN_FOUND=0" >> $GITHUB_ENV
-          else
-            echo "GH_ADMIN_TOKEN_FOUND=1" >> $GITHUB_ENV
-
-            echo "GH_ADMIN_TOKEN not found."
-          fi
-
-      - name: Get GH_ADMIN_TOKEN from AWS SSM Parameter Store
-        id: get-gh-admin-token
-        if: ${{ steps.check-gh-admin-token.outcome == 'success' && env.GH_ADMIN_TOKEN_FOUND == '0' }}
-        run: |
-          echo "::add-mask::$(aws ssm get-parameter \
-            --region "${{ env.AWS_REGION }}" \
-            --name "${{ env.GH_ADMIN_TOKEN_PARAMETER }}" \
-            --query "Parameter.Value" \
-            --with-decryption \
-            --output text)"
-          
-          echo "GH_ADMIN_TOKEN=$(aws ssm get-parameter \
-            --region "${{ env.AWS_REGION }}" \
-            --name "${{ env.GH_ADMIN_TOKEN_PARAMETER }}" \
-            --query "Parameter.Value" \
-            --with-decryption \
-            --output text)" >> $GITHUB_ENV
-
       - name: Check for SLACK_GHA_NOTIFY_BOT_TOKEN in AWS SSM Parameter Store
         id: check-slack-gha-notify-bot-token
-        if: ${{ steps.get-gh-admin-token.outcome == 'success' }}
+        if: ${{ steps.get-gh-admin-user-name.outcome == 'success' }}
         run: |
           aws ssm get-parameter \
             --region "${{ env.AWS_REGION }}" \
@@ -161,15 +120,11 @@ jobs:
         run: |
           echo "COMMIT_MESSAGE=$(echo \"${{ github.event.head_commit.message }}\")" >> $GITHUB_ENV
 
-      - name: Authenticate GitHub CLI
-        id: authenticate-github-cli
-        if: ${{ steps.get-commit-message.outcome == 'success' }}
-        run: |
-          echo ${{ env.GH_ADMIN_TOKEN }} | gh auth login --with-token
-
       - name: Open PR
         id: open-pr
-        if: ${{ steps.authenticate-github-cli.outcome == 'success' }}
+        if: ${{ steps.get-commit-message.outcome == 'success' }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           gh pr create \
             --head ${{ env.BRANCH }} \
