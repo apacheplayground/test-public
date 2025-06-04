@@ -50,7 +50,7 @@ jobs:
 
       - name: Get GH_ADMIN_USER_NAME from AWS SSM Parameter Store
         id: get-gh-admin-user-name
-        if: ${{ steps.check-gh-admin-user-name.outcome == 'success' && env.GH_ADMIN_USER_NAME_FOUND == "0" }}
+        if: ${{ steps.check-gh-admin-user-name.outcome == 'success' && env.GH_ADMIN_USER_NAME_FOUND == '0' }}
         run: |
           echo "::add-mask::$(aws ssm get-parameter \
             --region "${{ env.AWS_REGION }}" \
@@ -90,7 +90,7 @@ jobs:
 
       - name: Get GH_ADMIN_USER_EMAIL from AWS SSM Parameter Store
         id: get-gh-admin-user-email
-        if: ${{ steps.check-gh-admin-user-email.outcome == 'success' && env.GH_ADMIN_USER_EMAIL_FOUND == "0" }}
+        if: ${{ steps.check-gh-admin-user-email.outcome == 'success' && env.GH_ADMIN_USER_EMAIL_FOUND == '0' }}
         run: |
           echo "::add-mask::$(aws ssm get-parameter \
             --region "${{ env.AWS_REGION }}" \
@@ -130,7 +130,7 @@ jobs:
 
       - name: Get SLACK_GHA_NOTIFY_BOT_TOKEN from AWS SSM Parameter Store
         id: get-slack-gha-notify-bot-token
-        if: ${{ steps.check-slack-gha-notify-bot-token.outcome == 'success' && env.SLACK_GHA_NOTIFY_BOT_TOKEN_FOUND == "0" }}
+        if: ${{ steps.check-slack-gha-notify-bot-token.outcome == 'success' && env.SLACK_GHA_NOTIFY_BOT_TOKEN_FOUND == '0' }}
         run: |
           echo "::add-mask::$(aws ssm get-parameter \
             --region "${{ env.AWS_REGION }}" \
