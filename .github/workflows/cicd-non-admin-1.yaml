@@ -1,0 +1,163 @@
+name: CICD Non-admin 1                                          # Configure AWS creds
+                                                                # Pull sensitive variables from AWS SSM Parameter Store 
+on:                                                             # Checkout repo                                                             
+  push:                                                         # Open PR in main branch 
+    branches:                                                   # Send PR URL to Slack channel / Notify if failure
+      - dev
+
+env:
+  BRANCH: dev
+  AWS_REGION: us-east-1
+
+  GH_ADMIN_USER_NAME_PARAMETER: AP_GH_ADMIN_USER_NAME
+  SLACK_GHA_NOTIFY_BOT_TOKEN_PARAMETER: AP_SLACK_GHA_NOTIFY_BOT_TOKEN
+  SLACK_CHANNEL_ID: ${{ secrets.REPO_SLACK_CHANNEL_ID }}
+
+jobs:
+  cicd-non-admin-1:
+    if: ${{ github.actor != 'ronfontebo' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Configure AWS credentials
+        id: configure-aws-credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AP_AWS_GHA_OIDC_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Check for GH_ADMIN_USER_NAME in AWS SSM Parameter Store
+        id: check-gh-admin-user-name
+        if: ${{ steps.configure-aws-credentials.outcome == 'success' }}
+        run: |
+          aws ssm get-parameter \
+            --region "${{ env.AWS_REGION }}" \
+            --name "${{ env.GH_ADMIN_USER_NAME_PARAMETER }}" \
+            --query "Parameter.Value" \
+            --no-with-decryption \
+            --output text
+
+          GH_ADMIN_USER_NAME_FOUND=$?
+
+          if [[ $GH_ADMIN_USER_NAME_FOUND == '0' ]];
+          then
+            echo "GH_ADMIN_USER_NAME_FOUND=0" >> $GITHUB_ENV
+          else
+            echo "GH_ADMIN_USER_NAME_FOUND=1" >> $GITHUB_ENV
+
+            echo "GH_ADMIN_USER_NAME not found."
+          fi
+
+      - name: Get GH_ADMIN_USER_NAME from AWS SSM Parameter Store
+        id: get-gh-admin-user-name
+        if: ${{ steps.check-gh-admin-user-name.outcome == 'success' && env.GH_ADMIN_USER_NAME_FOUND == "0" }}
+        run: |
+          echo "::add-mask::$(aws ssm get-parameter \
+            --region "${{ env.AWS_REGION }}" \
+            --name "${{ env.GH_ADMIN_USER_NAME_PARAMETER }}" \
+            --query "Parameter.Value" \
+            --with-decryption \
+            --output text)"
+          
+          echo "GH_ADMIN_USER_NAME=$(aws ssm get-parameter \
+            --region "${{ env.AWS_REGION }}" \
+            --name "${{ env.GH_ADMIN_USER_NAME_PARAMETER }}" \
+            --query "Parameter.Value" \
+            --with-decryption \
+            --output text)" >> $GITHUB_ENV
+
+      - name: Check for SLACK_GHA_NOTIFY_BOT_TOKEN in AWS SSM Parameter Store
+        id: check-slack-gha-notify-bot-token
+        if: ${{ steps.get-gh-admin-user-name.outcome == 'success' }}
+        run: |
+          aws ssm get-parameter \
+            --region "${{ env.AWS_REGION }}" \
+            --name "${{ env.SLACK_GHA_NOTIFY_BOT_TOKEN_PARAMETER }}" \
+            --query "Parameter.Value" \
+            --no-with-decryption \
+            --output text
+
+          SLACK_GHA_NOTIFY_BOT_TOKEN_FOUND=$?
+
+          if [[ $SLACK_GHA_NOTIFY_BOT_TOKEN_FOUND == '0' ]];
+          then
+            echo "SLACK_GHA_NOTIFY_BOT_TOKEN_FOUND=0" >> $GITHUB_ENV
+          else
+            echo "SLACK_GHA_NOTIFY_BOT_TOKEN_FOUND=1" >> $GITHUB_ENV
+
+            echo "SLACK_GHA_NOTIFY_BOT_TOKEN not found."
+          fi
+
+      - name: Get SLACK_GHA_NOTIFY_BOT_TOKEN from AWS SSM Parameter Store
+        id: get-slack-gha-notify-bot-token
+        if: ${{ steps.check-slack-gha-notify-bot-token.outcome == 'success' && env.SLACK_GHA_NOTIFY_BOT_TOKEN_FOUND == "0" }}
+        run: |
+          echo "::add-mask::$(aws ssm get-parameter \
+            --region "${{ env.AWS_REGION }}" \
+            --name "${{ env.SLACK_GHA_NOTIFY_BOT_TOKEN_PARAMETER }}" \
+            --query "Parameter.Value" \
+            --with-decryption \
+            --output text)"
+          
+          echo "SLACK_GHA_NOTIFY_BOT_TOKEN=$(aws ssm get-parameter \
+            --region "${{ env.AWS_REGION }}" \
+            --name "${{ env.SLACK_GHA_NOTIFY_BOT_TOKEN_PARAMETER }}" \
+            --query "Parameter.Value" \
+            --with-decryption \
+            --output text)" >> $GITHUB_ENV
+
+      - name: Checkout Repo
+        id: checkout-repo
+        if: ${{ steps.get-slack-gha-notify-bot-token.outcome == 'success' }}
+        uses: actions/checkout@v4
+
+      - name: Get Commit Message
+        id: get-commit-message
+        if: ${{ steps.checkout-repo.outcome == 'success' }}        
+        run: |
+          echo "COMMIT_MESSAGE=$(echo \"${{ github.event.head_commit.message }}\")" >> $GITHUB_ENV
+
+      - name: Open PR
+        id: open-pr
+        if: ${{ steps.get-commit-message.outcome == 'success' }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh pr create \
+            --head ${{ env.BRANCH }} \
+            --base "main" \
+            --title ${{ env.COMMIT_MESSAGE }} \
+            --body ${{ env.COMMIT_MESSAGE }} > /tmp/pr-url.txt
+
+          echo "PR_URL=$(cat /tmp/pr-url.txt)" >> $GITHUB_ENV
+
+      - name: Send PR URL to Slack Channel
+        id: send-pr-url-to-slack-channel
+        if: ${{ steps.open-pr.outcome == 'success' }}
+        uses: slackapi/slack-github-action@v2.1.0
+        with:
+          method: chat.postMessage
+          token: ${{ env.SLACK_GHA_NOTIFY_BOT_TOKEN }}
+          payload: |
+            channel: ${{ env.SLACK_CHANNEL_ID }}
+            text: |
+              New PR:
+              PR author: ${{ github.actor }}
+              PR URL: ${{ env.PR_URL }}
+
+              @${{ env.GH_ADMIN_USER_NAME }}, checkout the PR and approve changes for merging.
+
+      - name: Notify Slack Channel Failure
+        id: notify-slack-channel-failure
+        if: ${{ steps.open-pr.outcome == 'failure' }}
+        uses: slackapi/slack-github-action@v2.1.0
+        with:
+          method: chat.postMessage
+          token: ${{ env.SLACK_GHA_NOTIFY_BOT_TOKEN }}
+          payload: |
+            channel: ${{ env.SLACK_CHANNEL_ID }}
+            text: |
+              Failed PR:
+              @${{ github.actor }}, the PR you tried to open was unsuccessful.
+              Revisit your commit, make any necessary changes and recommit.
+
+######################################## APACHEPLAYGROUND™ ########################################
