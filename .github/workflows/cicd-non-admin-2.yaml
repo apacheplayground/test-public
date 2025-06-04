@@ -1,0 +1,451 @@
+name: CICD Non-admin 2                                        # Configure AWS creds
+                                                              # Pull sensitive variables from AWS SSM Parameter Store                                            # Open PR in main branch, 
+on:                                                           # Checkout repo 
+  pull_request:                                               # Update CHANGELOG
+    types:                                                    # Update README
+      - closed                                                # Commit & push updates
+    branches:                                                 # Tag & push next version
+      - main                                                  # Notfiy Slack channel
+
+env:
+  AWS_REGION: us-east-1
+
+  GH_ADMIN_USER_NAME_PARAMETER: AP_GH_ADMIN_USER_NAME 
+  GH_ADMIN_USER_EMAIL_PARAMETER: AP_GH_ADMIN_USER_EMAIL
+  SLACK_GHA_NOTIFY_BOT_TOKEN_PARAMETER: AP_SLACK_GHA_NOTIFY_BOT_TOKEN
+
+jobs:
+  cicd-non-admin-2:
+    if: ${{ github.event.pull_request.merged == true && github.actor == 'ronfontebo' }}
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write                                           # This is required for requesting the JWT (OIDC)
+      contents: write
+      pull-requests: write
+    steps:
+      - name: Configure AWS credentials
+        id: configure-aws-credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AP_AWS_GHA_OIDC_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Check for GH_ADMIN_USER_NAME in AWS SSM Parameter Store
+        id: check-gh-admin-user-name
+        if: ${{ steps.configure-aws-credentials.outcome == 'success' }}
+        run: |
+          aws ssm get-parameter \
+            --region "${{ env.AWS_REGION }}" \
+            --name "${{ env.GH_ADMIN_USER_NAME_PARAMETER }}" \
+            --query "Parameter.Value" \
+            --no-with-decryption \
+            --output text
+
+          GH_ADMIN_USER_NAME_FOUND=$?
+
+          if [[ $GH_ADMIN_USER_NAME_FOUND == '0' ]];
+          then
+            echo "GH_ADMIN_USER_NAME_FOUND=0" >> $GITHUB_ENV
+          else
+            echo "GH_ADMIN_USER_NAME_FOUND=1" >> $GITHUB_ENV
+
+            echo "GH_ADMIN_USER_NAME not found."
+          fi
+
+      - name: Get GH_ADMIN_USER_NAME from AWS SSM Parameter Store
+        id: get-gh-admin-user-name
+        if: ${{ steps.check-gh-admin-user-name.outcome == 'success' && env.GH_ADMIN_USER_NAME_FOUND == '0' }}
+        run: |
+          echo "::add-mask::$(aws ssm get-parameter \
+            --region "${{ env.AWS_REGION }}" \
+            --name "${{ env.GH_ADMIN_USER_NAME_PARAMETER }}" \
+            --query "Parameter.Value" \
+            --with-decryption \
+            --output text)"
+          
+          echo "GH_ADMIN_USER_NAME=$(aws ssm get-parameter \
+            --region "${{ env.AWS_REGION }}" \
+            --name "${{ env.GH_ADMIN_USER_NAME_PARAMETER }}" \
+            --query "Parameter.Value" \
+            --with-decryption \
+            --output text)" >> $GITHUB_ENV
+
+      - name: Check for GH_ADMIN_USER_EMAIL in AWS SSM Parameter Store
+        id: check-gh-admin-user-email
+        if: ${{ steps.get-gh-admin-user-name.outcome == 'success' }}
+        run: |
+          aws ssm get-parameter \
+            --region "${{ env.AWS_REGION }}" \
+            --name "${{ env.GH_ADMIN_USER_EMAIL_PARAMETER }}" \
+            --query "Parameter.Value" \
+            --no-with-decryption \
+            --output text
+
+          GH_ADMIN_USER_EMAIL_FOUND=$?
+
+          if [[ $GH_ADMIN_USER_EMAIL_FOUND == '0' ]];
+          then
+            echo "GH_ADMIN_USER_EMAIL_FOUND=0" >> $GITHUB_ENV
+          else
+            echo "GH_ADMIN_USER_EMAIL_FOUND=1" >> $GITHUB_ENV
+
+            echo "GH_ADMIN_USER_EMAIL not found."
+          fi
+
+      - name: Get GH_ADMIN_USER_EMAIL from AWS SSM Parameter Store
+        id: get-gh-admin-user-email
+        if: ${{ steps.check-gh-admin-user-email.outcome == 'success' && env.GH_ADMIN_USER_EMAIL_FOUND == '0' }}
+        run: |
+          echo "::add-mask::$(aws ssm get-parameter \
+            --region "${{ env.AWS_REGION }}" \
+            --name "${{ env.GH_ADMIN_USER_EMAIL_PARAMETER }}" \
+            --query "Parameter.Value" \
+            --with-decryption \
+            --output text)"
+          
+          echo "GH_ADMIN_USER_EMAIL=$(aws ssm get-parameter \
+            --region "${{ env.AWS_REGION }}" \
+            --name "${{ env.GH_ADMIN_USER_EMAIL_PARAMETER }}" \
+            --query "Parameter.Value" \
+            --with-decryption \
+            --output text)" >> $GITHUB_ENV
+
+      - name: Check for SLACK_GHA_NOTIFY_BOT_TOKEN in AWS SSM Parameter Store
+        id: check-slack-gha-notify-bot-token
+        if: ${{ steps.get-gh-admin-user-email.outcome == 'success' }}
+        run: |
+          aws ssm get-parameter \
+            --region "${{ env.AWS_REGION }}" \
+            --name "${{ env.SLACK_GHA_NOTIFY_BOT_TOKEN_PARAMETER }}" \
+            --query "Parameter.Value" \
+            --no-with-decryption \
+            --output text
+
+          SLACK_GHA_NOTIFY_BOT_TOKEN_FOUND=$?
+
+          if [[ $SLACK_GHA_NOTIFY_BOT_TOKEN_FOUND == '0' ]];
+          then
+            echo "SLACK_GHA_NOTIFY_BOT_TOKEN_FOUND=0" >> $GITHUB_ENV
+          else
+            echo "SLACK_GHA_NOTIFY_BOT_TOKEN_FOUND=1" >> $GITHUB_ENV
+
+            echo "SLACK_GHA_NOTIFY_BOT_TOKEN not found."
+          fi
+
+      - name: Get SLACK_GHA_NOTIFY_BOT_TOKEN from AWS SSM Parameter Store
+        id: get-slack-gha-notify-bot-token
+        if: ${{ steps.check-slack-gha-notify-bot-token.outcome == 'success' && env.SLACK_GHA_NOTIFY_BOT_TOKEN_FOUND == '0' }}
+        run: |
+          echo "::add-mask::$(aws ssm get-parameter \
+            --region "${{ env.AWS_REGION }}" \
+            --name "${{ env.SLACK_GHA_NOTIFY_BOT_TOKEN_PARAMETER }}" \
+            --query "Parameter.Value" \
+            --with-decryption \
+            --output text)"
+          
+          echo "SLACK_GHA_NOTIFY_BOT_TOKEN=$(aws ssm get-parameter \
+            --region "${{ env.AWS_REGION }}" \
+            --name "${{ env.SLACK_GHA_NOTIFY_BOT_TOKEN_PARAMETER }}" \
+            --query "Parameter.Value" \
+            --with-decryption \
+            --output text)" >> $GITHUB_ENV
+
+      - name: Checkout Repo and Switch to Dev Branch
+        id: checkout-repo
+        if: ${{ steps.get-slack-gha-notify-bot-token.outcome == 'success' }}
+        uses: actions/checkout@v4
+        with:
+          ref: dev
+          fetch-depth: 0
+
+      - name: Git Config User
+        id: git-config-user
+        if: ${{ steps.checkout-repo.outcome == 'success' }}
+        run: |
+          git config user.name ${{ env.GH_ADMIN_USER_NAME }}
+          git config user.email ${{ env.GH_ADMIN_USER_EMAIL }}
+
+      - name: Get Commit Author
+        id: get-commit-author
+        if: ${{ steps.git-config-user.outcome == 'success' }}
+        run: |
+          echo "COMMIT_AUTHOR=$(echo \"${{ github.event.head_commit.author.name }}\")" >> $GITHUB_ENV
+
+      - name: Get Commit Message 1
+        id: get-commit-message-1
+        if: ${{ steps.get-commit-author.outcome == 'success' }}
+        run: |
+          echo "COMMIT_MESSAGE_1=$(echo \"${{ github.event.head_commit.message }}\")" >> $GITHUB_ENV
+
+      - name: Get commit message 2 and 3
+        id: get-commit-message-2-and-3
+        if: ${{ steps.get-commit-message-1.outcome == 'success' }}
+        run: |
+          echo "COMMIT_MESSAGE_2=${{ env.COMMIT_MESSAGE_1 }}" >> $GITHUB_ENV
+          echo "COMMIT_MESSAGE_3=$(echo \"${{ env.COMMIT_MESSAGE_1 }}\")" >> $GITHUB_ENV
+
+      - name: Switch back to main branch
+        id: switch-back-to-main-branch
+        if: ${{ steps.get-commit-message-2-and-3.outcome == 'success' }}
+        uses: actions/checkout@v4        
+        with:
+          repository: ${{ github.repository }}
+          ref: main
+          fetch-depth: 0
+
+      - name: Generate next version tag
+        id: generate-next-version-tag
+        if: ${{ steps.switch-back-to-main-branch.outcome == 'success' }}
+        run: |
+          define_version_update_type() {
+            echo "Commit Message: ${{ env.COMMIT_MESSAGE_2 }}"
+
+            echo "${{ env.COMMIT_MESSAGE_2 }}" | grep "feat-ma" > /dev/null
+            MAJOR_VERSION_UPDATE_FOUND=$?
+
+            if [[ $MAJOR_VERSION_UPDATE_FOUND == "0" ]];
+            then
+              VERSION_UPDATE_TYPE_1=major
+              VERSION_UPDATE_TYPE_2=major
+            else
+              echo "${{ env.COMMIT_MESSAGE_2 }}" | grep "feat-mi" > /dev/null
+              MINOR_VERSION_UPDATE_FOUND=$?
+
+              if [[ $MINOR_VERSION_UPDATE_FOUND == "0" ]];
+              then
+                VERSION_UPDATE_TYPE_1=minor
+                VERSION_UPDATE_TYPE_2=minor
+              else
+                echo "${{ env.COMMIT_MESSAGE_2 }}" | grep "bugfix" > /dev/null
+                BUGFIX_VERSION_UPDATE_FOUND=$?
+
+                if [[ $BUGFIX_VERSION_UPDATE_FOUND == "0" ]];
+                then
+                  VERSION_UPDATE_TYPE_1=patch
+                  VERSION_UPDATE_TYPE_2=bugfix             
+                else
+                  echo "${{ env.COMMIT_MESSAGE_2 }}" | grep "hotfix" > /dev/null
+                  HOTFIX_VERSION_UPDATE_FOUND=$?
+
+                  if [[ $HOTFIX_VERSION_UPDATE_FOUND == "0" ]];
+                  then
+                    VERSION_UPDATE_TYPE_1=patch
+                    VERSION_UPDATE_TYPE_2=hotfix                  
+                  else
+                    echo "${{ env.COMMIT_MESSAGE_2 }}" | grep "docsfix" > /dev/null
+                    DOCSFIX_VERSION_UPDATE_FOUND=$?
+
+                    if [[ $DOCSFIX_VERSION_UPDATE_FOUND == "0" ]];
+                    then
+                      VERSION_UPDATE_TYPE_1=none
+                      VERSION_UPDATE_TYPE_2=docsfix
+                    else
+                      echo "|"
+                      echo "| Error: Invalid commit message"
+                      echo "|"
+                      echo "| Commit message must follow the format '<type>/<message>'."
+                      echo "| Where 'type' can be feat-ma, feat-mi, bugfix, hotfix or docsfix."
+                      echo "|"
+                    fi
+                  fi
+                fi
+              fi
+            fi
+
+            echo "VERSION_UPDATE_TYPE_1=$VERSION_UPDATE_TYPE_1" >> $GITHUB_ENV
+            echo "VERSION_UPDATE_TYPE_2=$VERSION_UPDATE_TYPE_2" >> $GITHUB_ENV
+
+            echo VERSION_UPDATE_TYPE_1=$VERSION_UPDATE_TYPE_1
+            echo VERSION_UPDATE_TYPE_2=$VERSION_UPDATE_TYPE_2
+          }
+
+          generate_next_version_tag() {
+            CURRENT_VERSION_TAG=$(git tag --list --sort=creatordate | tail -n 1 | sed -e "s|v||")
+
+            CURRENT_VERSION_MAJOR=$(echo $CURRENT_VERSION_TAG | cut -d '.' -f 1)
+            CURRENT_VERSION_MINOR=$(echo $CURRENT_VERSION_TAG | cut -d '.' -f 2)
+            CURRENT_VERSION_PATCH=$(echo $CURRENT_VERSION_TAG | cut -d '.' -f 3)
+
+            if [[ $VERSION_UPDATE_TYPE_1 == "major" ]];
+            then
+              NEXT_VERSION_MAJOR=$((CURRENT_VERSION_MAJOR + 1))
+              NEXT_VERSION_MINOR=0
+              NEXT_VERSION_PATCH=0
+            elif [[ $VERSION_UPDATE_TYPE_1 == "minor" ]];
+            then
+              NEXT_VERSION_MAJOR=$CURRENT_VERSION_MAJOR
+              NEXT_VERSION_MINOR=$((CURRENT_VERSION_MINOR + 1))
+              NEXT_VERSION_PATCH=0
+            else
+              if [[ $VERSION_UPDATE_TYPE_1 == "ptach" ]];
+              then
+                NEXT_VERSION_MAJOR=$CURRENT_VERSION_MAJOR
+                NEXT_VERSION_MINOR=$CURRENT_VERSION_MINOR
+                NEXT_VERSION_PATCH=$((CURRENT_VERSION_PATCH + 1))
+              else
+                NEXT_VERSION_MAJOR=$CURRENT_VERSION_MAJOR
+                NEXT_VERSION_MINOR=$CURRENT_VERSION_MINOR
+                NEXT_VERSION_PATCH=$CURRENT_VERSION_PATCH
+              fi
+            fi
+
+            NEXT_VERSION="$NEXT_VERSION_MAJOR.$NEXT_VERSION_MINOR.$NEXT_VERSION_PATCH"
+            echo $NEXT_VERSION
+          }
+
+          set +e
+          git fetch --tags
+          git tag --list | grep "v" > /dev/null
+          GIT_TAGS_FOUND=$?
+          echo "GIT_TAGS_FOUND=$GIT_TAGS_FOUND" >> $GITHUB_ENV
+
+          if [[ $GIT_TAGS_FOUND == "0" ]];
+          then
+            echo "Git tags found."
+            echo ""
+            echo "Existing Versions:"
+            echo "------------------"
+            git tag --list --sort=creatordate | grep "v"
+            echo ""
+
+            define_version_update_type
+
+            echo CURRENT_VERSION_TAG="$(git tag --list --sort=creatordate | tail -n 1)"
+            echo NEXT_VERSION_TAG=v"$(generate_next_version_tag)"
+
+            echo "CURRENT_VERSION_TAG=$(git tag --list --sort=creatordate | tail -n 1)" >> $GITHUB_ENV   
+            echo "NEXT_VERSION_TAG=v$(generate_next_version_tag)" >> $GITHUB_ENV
+          else
+            echo "No Git tags found"
+            echo "Preparing to tag initial release version"
+            echo NEXT_VERSION_TAG=v1.0.0
+            echo "NEXT_VERSION_TAG=v1.0.0" >> $GITHUB_ENV
+          fi
+          set -e
+
+      - name: Update changelog
+        id: update-changelog
+        if: ${{ steps.generate-next-version-tag.outcome == 'success' }}
+        run: |
+          DATE=$(date +%m-%d-%Y)
+
+          generate_changelog_message() {
+            if [[ ${{ env.VERSION_UPDATE_TYPE_2 }} == "major" ]];
+            then
+              CHANGELOG_HEADING="Feature (Major)"
+              CHANGELOG_MESSAGE=$(echo "${{ env.COMMIT_MESSAGE_2 }}" | sed -e "s|feat-ma/||")
+            elif [[ ${{ env.VERSION_UPDATE_TYPE_2 }} == "minor" ]];
+            then
+              CHANGELOG_HEADING="Feature (Minor)"
+              CHANGELOG_MESSAGE=$(echo "${{ env.COMMIT_MESSAGE_2 }}" | sed -e "s|feat-mi/||")
+            else
+              if [[ ${{ env.VERSION_UPDATE_TYPE_2 }} == "bugfix" ]];
+              then
+                CHANGELOG_HEADING="Patch (Bugfix)"
+                CHANGELOG_MESSAGE=$(echo "${{ env.COMMIT_MESSAGE_2 }}" | sed -e "s|bugfix/||")
+              elif [[ ${{ env.VERSION_UPDATE_TYPE_2 }} == "hotfix" ]];
+              then
+                CHANGELOG_HEADING="Patch (Hotfix)"
+                CHANGELOG_MESSAGE=$(echo "${{ env.COMMIT_MESSAGE_2 }}" | sed -e "s|hotfix/||")
+              else
+                CHANGELOG_HEADING="Docsfix"
+                CHANGELOG_MESSAGE=$(echo "${{ env.COMMIT_MESSAGE_2 }}" | sed -e "s|docsfix/||")
+              fi
+            fi
+
+            echo ""
+            echo CHANGELOG_HEADING=$CHANGELOG_HEADING
+            echo CHANGELOG_MESSAGE=$CHANGELOG_MESSAGE
+            echo ""                  
+          }
+
+          if [[ ${{ env.GIT_TAGS_FOUND }} == "0" ]];
+          then
+            generate_changelog_message
+
+            cat >> /tmp/CHANGELOG.md<< EOF
+          # Changelog
+
+          All notable changes to this module will be documented in this file.
+
+          ## ${{ env.NEXT_VERSION_TAG }} ($DATE)
+
+          ### $CHANGELOG_HEADING
+          * $CHANGELOG_MESSAGE
+
+          EOF
+
+            cp CHANGELOG.md /tmp/CHANGELOG-2.md
+            sed -i '1,4d' /tmp/CHANGELOG-2.md
+            echo "$(cat /tmp/CHANGELOG-2.md)" >> /tmp/CHANGELOG.md
+            cat /tmp/CHANGELOG.md
+            mv /tmp/CHANGELOG.md CHANGELOG.md
+          else
+            cat >> CHANGELOG.md<< EOF
+          # Changelog
+
+          All notable changes to this module will be documented in this file.
+
+          ## ${{ env.NEXT_VERSION_TAG }} ($DATE)
+          
+          ### Initial release
+          * Initial release version
+
+          EOF
+          fi
+
+      - name: Update README
+        id: update-readme
+        if: ${{ steps.update-changelog.outcome == 'success' }}
+        env:
+          BANNER_URL: https://github.com/apacheplayground/terraform-aws-s3-webserver/blob/main/assets/banner.jpg
+        run: |
+          sed -i "s|\./assets/banner\.jpg|${{ env.BANNER_URL }}|g" README.md
+
+      - name: Commit and Push Updates
+        id: commit-and-push-updates
+        if: ${{ steps.update-readme.outcome == 'success' }}
+        run: |
+          git status
+          git add .
+          git commit -m ${{ env.COMMIT_MESSAGE_3 }}
+          git push origin
+
+      - name: Tag and Push Next Version
+        id: tag-and-push-next-version
+        if: ${{ steps.commit-and-push-updates.outcome == 'success' }}        
+        run: |
+          git tag -a ${{ env.NEXT_VERSION_TAG }} HEAD -m ${{ env.COMMIT_MESSAGE_3 }}
+          git push origin ${{ env.NEXT_VERSION_TAG }}
+
+      - name: Notify Slack Channel Success
+        id: notify-slack-channel-success
+        if: ${{ steps.tag-and-push-next-version.outcome == 'success' }}
+        uses: slackapi/slack-github-action@v2.1.0
+        with:
+          method: chat.postMessage
+          token: ${{ env.SLACK_GHA_NOTIFY_BOT_TOKEN }}
+          payload: |
+            channel: ${{ env.SLACK_CHANNEL_ID }}
+            text: |
+              New commit:
+              Commit author: ${{ env.COMMIT_AUTHOR }}
+              Commit Message: ${{ env.COMMIT_MESSAGE_2 }}
+              Commit CICD status: ${{ job.status }} :white_check_mark: :clap: 
+
+      - name: Notify Slack Channel Failure
+        id: notify-slack-channel-failure
+        if: ${{ steps.tag-and-push-next-version.outcome == 'failure' }}
+        uses: slackapi/slack-github-action@v2.1.0
+        with:
+          method: chat.postMessage
+          token: ${{ env.SLACK_GHA_NOTIFY_BOT_TOKEN }}
+          payload: |
+            channel: ${{ env.SLACK_CHANNEL_ID }}
+            text: |
+              New commit:
+              Commit author: ${{ env.COMMIT_AUTHOR }}
+              Commit Message: ${{ env.COMMIT_MESSAGE_2 }}
+              Commit CICD status: ${{ job.status }} :x: :cold_sweat:
+
+######################################## APACHEPLAYGROUND™ ########################################
