@@ -1,0 +1,436 @@
+name: CICD Admin                                                          # Configure AWS creds
+                                                                          # Pull sensitive variables from AWS SSM Parameter Store 
+on:                                                                       # Checkout repo
+  push:                                                                   # Open PR in main branch (as GHA bot)
+    branches:                                                             # Login to GH CLI        (as repo admin)
+     - dev                                                                # Merge PR               (as repo admin)
+                                                                          # Update CHANGELOG
+env:                                                                      # Update README
+  BRANCH: dev                                                             # Commit & push updates
+  AWS_REGION: us-east-1                                                   # Tag & push next version
+                                                                          # Notfiy Slack channel                                         
+  GH_ADMIN_USER_NAME_PARAMETER: AP_GH_ADMIN_USER_NAME 
+  GH_ADMIN_USER_EMAIL_PARAMETER: AP_GH_ADMIN_USER_EMAIL
+  GH_ADMIN_TOKEN_PARAMETER: AP_GH_ADMIN_TOKEN
+  SLACK_GHA_NOTIFY_BOT_TOKEN_PARAMETER: AP_SLACK_GHA_NOTIFY_BOT_TOKEN
+  SLACK_CHANNEL_ID: ${{ secrets.REPO_SLACK_CHANNEL_ID }}
+
+jobs:
+  cicd-admin:
+    if: ${{ github.actor == 'ronfontebo' }}
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write                                                     # This is required for requesting the JWT (OIDC)
+      contents: write
+      pull-requests: write
+    steps:
+      - name: Configure AWS credentials
+        id: configure-aws-credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AP_AWS_GHA_OIDC_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Check for GH_ADMIN_USER_NAME in AWS SSM Parameter Store
+        id: check-gh-admin-user-name
+        if: ${{ steps.configure-aws-credentials.outcome == 'success' }}
+        run: |
+          aws ssm get-parameter \
+            --region "${{ env.AWS_REGION }}" \
+            --name "${{ env.GH_ADMIN_USER_NAME_PARAMETER }}" \
+            --query "Parameter.Value" \
+            --no-with-decryption \
+            --output text
+
+          GH_ADMIN_USER_NAME_FOUND=$?
+
+          if [[ $GH_ADMIN_USER_NAME_FOUND == '0' ]];
+          then
+            echo "GH_ADMIN_USER_NAME_FOUND=0" >> $GITHUB_ENV
+          else
+            echo "GH_ADMIN_USER_NAME_FOUND=1" >> $GITHUB_ENV
+
+            echo "GH_ADMIN_USER_NAME not found."
+          fi
+
+      - name: Get GH_ADMIN_USER_NAME from AWS SSM Parameter Store
+        id: get-gh-admin-user-name
+        if: ${{ steps.check-gh-admin-user-name.outcome == 'success' && env.GH_ADMIN_USER_NAME_FOUND == '0' }}
+        run: |
+          echo "::add-mask::$(aws ssm get-parameter \
+            --region "${{ env.AWS_REGION }}" \
+            --name "${{ env.GH_ADMIN_USER_NAME_PARAMETER }}" \
+            --query "Parameter.Value" \
+            --with-decryption \
+            --output text)"
+          
+          echo "GH_ADMIN_USER_NAME=$(aws ssm get-parameter \
+            --region "${{ env.AWS_REGION }}" \
+            --name "${{ env.GH_ADMIN_USER_NAME_PARAMETER }}" \
+            --query "Parameter.Value" \
+            --with-decryption \
+            --output text)" >> $GITHUB_ENV
+
+      - name: Check for GH_ADMIN_USER_EMAIL in AWS SSM Parameter Store
+        id: check-gh-admin-user-email
+        if: ${{ steps.get-gh-admin-user-name.outcome == 'success' }}
+        run: |
+          aws ssm get-parameter \
+            --region "${{ env.AWS_REGION }}" \
+            --name "${{ env.GH_ADMIN_USER_EMAIL_PARAMETER }}" \
+            --query "Parameter.Value" \
+            --no-with-decryption \
+            --output text
+
+          GH_ADMIN_USER_EMAIL_FOUND=$?
+
+          if [[ $GH_ADMIN_USER_EMAIL_FOUND == '0' ]];
+          then
+            echo "GH_ADMIN_USER_EMAIL_FOUND=0" >> $GITHUB_ENV
+          else
+            echo "GH_ADMIN_USER_EMAIL_FOUND=1" >> $GITHUB_ENV
+
+            echo "GH_ADMIN_USER_EMAIL not found."
+          fi
+
+      - name: Get GH_ADMIN_USER_EMAIL from AWS SSM Parameter Store
+        id: get-gh-admin-user-email
+        if: ${{ steps.check-gh-admin-user-email.outcome == 'success' && env.GH_ADMIN_USER_EMAIL_FOUND == '0' }}
+        run: |
+          echo "::add-mask::$(aws ssm get-parameter \
+            --region "${{ env.AWS_REGION }}" \
+            --name "${{ env.GH_ADMIN_USER_EMAIL_PARAMETER }}" \
+            --query "Parameter.Value" \
+            --with-decryption \
+            --output text)"
+          
+          echo "GH_ADMIN_USER_EMAIL=$(aws ssm get-parameter \
+            --region "${{ env.AWS_REGION }}" \
+            --name "${{ env.GH_ADMIN_USER_EMAIL_PARAMETER }}" \
+            --query "Parameter.Value" \
+            --with-decryption \
+            --output text)" >> $GITHUB_ENV
+
+      - name: Check for GH_ADMIN_TOKEN in AWS SSM Parameter Store
+        id: check-gh-admin-token
+        if: ${{ steps.get-gh-admin-user-email.outcome == 'success' }}
+        run: |
+          aws ssm get-parameter \
+            --region "${{ env.AWS_REGION }}" \
+            --name "${{ env.GH_ADMIN_TOKEN_PARAMETER }}" \
+            --query "Parameter.Value" \
+            --no-with-decryption \
+            --output text
+
+          GH_ADMIN_TOKEN_FOUND=$?
+
+          if [[ $GH_ADMIN_TOKEN_FOUND == '0' ]];
+          then
+            echo "GH_ADMIN_TOKEN_FOUND=0" >> $GITHUB_ENV
+          else
+            echo "GH_ADMIN_TOKEN_FOUND=1" >> $GITHUB_ENV
+
+            echo "GH_ADMIN_TOKEN not found."
+          fi
+
+      - name: Get GH_ADMIN_TOKEN from AWS SSM Parameter Store
+        id: get-gh-admin-token
+        if: ${{ steps.check-gh-admin-token.outcome == 'success' && env.GH_ADMIN_TOKEN_FOUND == '0' }}
+        run: |
+          echo "::add-mask::$(aws ssm get-parameter \
+            --region "${{ env.AWS_REGION }}" \
+            --name "${{ env.GH_ADMIN_TOKEN_PARAMETER }}" \
+            --query "Parameter.Value" \
+            --with-decryption \
+            --output text)"
+          
+          echo "GH_ADMIN_TOKEN=$(aws ssm get-parameter \
+            --region "${{ env.AWS_REGION }}" \
+            --name "${{ env.GH_ADMIN_TOKEN_PARAMETER }}" \
+            --query "Parameter.Value" \
+            --with-decryption \
+            --output text)" >> $GITHUB_ENV
+
+      - name: Check for SLACK_GHA_NOTIFY_BOT_TOKEN in AWS SSM Parameter Store
+        id: check-slack-gha-notify-bot-token
+        if: ${{ steps.get-gh-admin-token.outcome == 'success' }}
+        run: |
+          aws ssm get-parameter \
+            --region "${{ env.AWS_REGION }}" \
+            --name "${{ env.SLACK_GHA_NOTIFY_BOT_TOKEN_PARAMETER }}" \
+            --query "Parameter.Value" \
+            --no-with-decryption \
+            --output text
+
+          SLACK_GHA_NOTIFY_BOT_TOKEN_FOUND=$?
+
+          if [[ $SLACK_GHA_NOTIFY_BOT_TOKEN_FOUND == '0' ]];
+          then
+            echo "SLACK_GHA_NOTIFY_BOT_TOKEN_FOUND=0" >> $GITHUB_ENV
+          else
+            echo "SLACK_GHA_NOTIFY_BOT_TOKEN_FOUND=1" >> $GITHUB_ENV
+
+            echo "SLACK_GHA_NOTIFY_BOT_TOKEN not found."
+          fi
+
+      - name: Get SLACK_GHA_NOTIFY_BOT_TOKEN from AWS SSM Parameter Store
+        id: get-slack-gha-notify-bot-token
+        if: ${{ steps.check-slack-gha-notify-bot-token.outcome == 'success' && env.SLACK_GHA_NOTIFY_BOT_TOKEN_FOUND == '0' }}
+        run: |
+          echo "::add-mask::$(aws ssm get-parameter \
+            --region "${{ env.AWS_REGION }}" \
+            --name "${{ env.SLACK_GHA_NOTIFY_BOT_TOKEN_PARAMETER }}" \
+            --query "Parameter.Value" \
+            --with-decryption \
+            --output text)"
+          
+          echo "SLACK_GHA_NOTIFY_BOT_TOKEN=$(aws ssm get-parameter \
+            --region "${{ env.AWS_REGION }}" \
+            --name "${{ env.SLACK_GHA_NOTIFY_BOT_TOKEN_PARAMETER }}" \
+            --query "Parameter.Value" \
+            --with-decryption \
+            --output text)" >> $GITHUB_ENV
+
+      - name: Checkout Repo
+        id: checkout-repo
+        if: ${{ steps.get-slack-gha-notify-bot-token.outcome == 'success' }}
+        uses: actions/checkout@v4
+
+      - name: Git Config User
+        id: git-config-user
+        if: ${{ steps.checkout-repo.outcome == 'success' }}
+        run: |
+          git config user.name ronfontebo
+          git config user.email ${{ env.GH_ADMIN_USER_EMAIL }}
+
+      - name: Get Commit Message 1
+        id: get-commit-message-1
+        if: ${{ steps.git-config-user.outcome == 'success' }}        
+        run: |
+          echo "COMMIT_MESSAGE_1=$(echo \"${{ github.event.head_commit.message }}\")" >> $GITHUB_ENV
+
+      - name: Get commit message 2 and 3
+        id: get-commit-message-2-and-3
+        if: ${{ steps.get-commit-message-1.outcome == 'success' }}
+        run: |
+          echo "COMMIT_MESSAGE_2=${{ env.COMMIT_MESSAGE_1 }}" >> $GITHUB_ENV
+          echo "COMMIT_MESSAGE_3=$(echo \"${{ env.COMMIT_MESSAGE_1 }}\")" >> $GITHUB_ENV
+
+      - name: Open PR
+        id: open-pr
+        if: ${{ steps.get-commit-message-2-and-3.outcome == 'success' }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}        
+        run: |
+          gh pr create \
+            --head "${{ env.BRANCH }}" \
+            --base "main" \
+            --title ${{ env.COMMIT_MESSAGE_1 }} \
+            --body ${{ env.COMMIT_MESSAGE_1 }}
+          
+      - name: Authenticate GitHub CLI
+        id: authenticate-github-cli
+        if: ${{ steps.open-pr.outcome == 'success' }}
+        run: |
+          echo ${{ env.GH_ADMIN_TOKEN }} | gh auth login --with-token
+
+      - name: Merge PR
+        id: merge-pr
+        if: ${{ steps.open-pr.outcome == 'success' }}
+        run: |
+          gh pr merge --merge
+
+      - name: Switch to Main Branch
+        id: switch-to-main-branch
+        if: ${{ steps.merge-pr.outcome == 'success' }}
+        uses: actions/checkout@v4        
+        with:
+          repository: ${{ github.repository }}
+          ref: main
+          fetch-depth: 0
+
+      - name: Define Update Type
+        id: define-update-type
+        if: ${{ steps.switch-to-main-branch.outcome == 'success' }}
+        run: |
+          define_update_type() {
+            echo "Commit Message: ${{ env.COMMIT_MESSAGE_2 }}"
+
+            echo "${{ env.COMMIT_MESSAGE_2 }}" | grep "feat-ma" > /dev/null
+            MAJOR_UPDATE_FOUND=$?
+
+            if [[ $MAJOR_UPDATE_FOUND == "0" ]];
+            then
+              UPDATE_TYPE_1=major
+              UPDATE_TYPE_2=major
+            else
+              echo "${{ env.COMMIT_MESSAGE_2 }}" | grep "feat-mi" > /dev/null
+              MINOR_UPDATE_FOUND=$?
+
+              if [[ $MINOR_UPDATE_FOUND == "0" ]];
+              then
+                UPDATE_TYPE_1=minor
+                UPDATE_TYPE_2=minor
+              else
+                echo "${{ env.COMMIT_MESSAGE_2 }}" | grep "bugfix" > /dev/null
+                BUGFIX_UPDATE_FOUND=$?
+
+                if [[ $BUGFIX_UPDATE_FOUND == "0" ]];
+                then
+                  UPDATE_TYPE_1=patch
+                  UPDATE_TYPE_2=bugfix             
+                else
+                  echo "${{ env.COMMIT_MESSAGE_2 }}" | grep "hotfix" > /dev/null
+                  HOTFIX_UPDATE_FOUND=$?
+
+                  if [[ $HOTFIX_UPDATE_FOUND == "0" ]];
+                  then
+                    UPDATE_TYPE_1=patch
+                    UPDATE_TYPE_2=hotfix                  
+                  else
+                    echo "${{ env.COMMIT_MESSAGE_2 }}" | grep "docsfix" > /dev/null
+                    DOCSFIX_UPDATE_FOUND=$?
+
+                    if [[ $DOCSFIX_UPDATE_FOUND == "0" ]];
+                    then
+                      UPDATE_TYPE_1=none
+                      UPDATE_TYPE_2=docsfix
+                    else
+                      echo "|"
+                      echo "| Error: Invalid commit message"
+                      echo "|"
+                      echo "| Commit message must follow the format '<type>/<message>'."
+                      echo "| Where 'type' can be feat-ma, feat-mi, bugfix, hotfix or docsfix."
+                      echo "|"
+                    fi
+                  fi
+                fi
+              fi
+            fi
+
+            echo "UPDATE_TYPE_1=$UPDATE_TYPE_1" >> $GITHUB_ENV
+            echo "UPDATE_TYPE_2=$UPDATE_TYPE_2" >> $GITHUB_ENV
+
+            echo UPDATE_TYPE_1=$UPDATE_TYPE_1
+            echo UPDATE_TYPE_2=$UPDATE_TYPE_2
+          }
+
+          set +e
+          define_update_type
+          set -e
+
+      - name: Update Changelog
+        id: update-changelog
+        if: ${{ steps.define-update-type.outcome == 'success' }}
+        run: |
+          DATE=$(date +%m-%d-%Y)
+
+          generate_changelog_message() {
+            if [[ ${{ env.UPDATE_TYPE_2 }} == "major" ]];
+            then
+              CHANGELOG_HEADING="Feature (Major)"
+              CHANGELOG_MESSAGE=$(echo "${{ env.COMMIT_MESSAGE_2 }}" | sed -e "s|feat-ma/||")
+            elif [[ ${{ env.UPDATE_TYPE_2 }} == "minor" ]];
+            then
+              CHANGELOG_HEADING="Feature (Minor)"
+              CHANGELOG_MESSAGE=$(echo "${{ env.COMMIT_MESSAGE_2 }}" | sed -e "s|feat-mi/||")
+            else
+              if [[ ${{ env.UPDATE_TYPE_2 }} == "bugfix" ]];
+              then
+                CHANGELOG_HEADING="Patch (Bugfix)"
+                CHANGELOG_MESSAGE=$(echo "${{ env.COMMIT_MESSAGE_2 }}" | sed -e "s|bugfix/||")
+              elif [[ ${{ env.UPDATE_TYPE_2 }} == "hotfix" ]];
+              then
+                CHANGELOG_HEADING="Patch (Hotfix)"
+                CHANGELOG_MESSAGE=$(echo "${{ env.COMMIT_MESSAGE_2 }}" | sed -e "s|hotfix/||")
+              else
+                CHANGELOG_HEADING="Docsfix"
+                CHANGELOG_MESSAGE=$(echo "${{ env.COMMIT_MESSAGE_2 }}" | sed -e "s|docsfix/||")
+              fi
+            fi
+
+            echo ""
+            echo CHANGELOG_HEADING=$CHANGELOG_HEADING
+            echo CHANGELOG_MESSAGE=$CHANGELOG_MESSAGE
+            echo ""                  
+          }
+
+          set +e
+          generate_changelog_message
+
+          ls | grep CHANGELOG
+          CHANGELOG_FOUND=$?
+
+          if [[ $CHANGELOG_FOUND == "0" ]];
+          then
+            cat >> /tmp/CHANGELOG.md<< EOF
+          # Changelog
+
+          All notable changes to this module will be documented in this file.
+
+          ## $CHANGELOG_HEADING ($DATE)
+          * $CHANGELOG_MESSAGE
+
+          EOF
+
+            cp CHANGELOG.md /tmp/CHANGELOG-2.md
+            sed -i '1,4d' /tmp/CHANGELOG-2.md
+            echo "$(cat /tmp/CHANGELOG-2.md)" >> /tmp/CHANGELOG.md
+            cat /tmp/CHANGELOG.md
+            mv /tmp/CHANGELOG.md CHANGELOG.md
+          else
+            cat >> CHANGELOG.md<< EOF
+          # Changelog
+
+          All notable changes to this module will be documented in this file.
+
+          ## $CHANGELOG_HEADING ($DATE)
+          * $CHANGELOG_MESSAGE
+
+          EOF
+          fi
+          set -e
+
+      - name: Commit and Push Updates
+        id: commit-and-push-updates
+        if: ${{ steps.update-changelog.outcome == 'success' }}
+        run: |
+          git config get user.name
+          git config get user.email
+
+          git status
+          git add .
+          git commit -m ${{ env.COMMIT_MESSAGE_3 }}
+          git push origin
+
+      - name: Notify Slack Channel Success
+        id: notify-slack-channel-success
+        if: ${{ steps.commit-and-push-updates.outcome == 'success' }}
+        uses: slackapi/slack-github-action@v2.1.0
+        with:
+          method: chat.postMessage
+          token: ${{ env.SLACK_GHA_NOTIFY_BOT_TOKEN }}
+          payload: |
+            channel: ${{ env.SLACK_CHANNEL_ID }}
+            text: |
+              New commit:
+              Commit author: ${{ github.actor }}  
+              Commit Message: ${{ env.COMMIT_MESSAGE_2 }}
+              Commit CICD status: ${{ job.status }} :white_check_mark: :clap: 
+
+      - name: Notify Slack Channel Failure
+        id: notify-slack-channel-failure
+        if: ${{ steps.commit-and-push-updates.outcome == 'failure' }}
+        uses: slackapi/slack-github-action@v2.1.0
+        with:
+          method: chat.postMessage
+          token: ${{ env.SLACK_GHA_NOTIFY_BOT_TOKEN }}
+          payload: |
+            channel: ${{ env.SLACK_CHANNEL_ID }}
+            text: |
+              New commit:
+              Commit author: ${{ github.actor }}  
+              Commit Message: ${{ env.COMMIT_MESSAGE_2 }}
+              Commit CICD status: ${{ job.status }} :x: :cold_sweat:
+
+######################################## APACHEPLAYGROUND™ ########################################
