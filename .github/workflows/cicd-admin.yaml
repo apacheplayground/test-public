@@ -1,11 +1,11 @@
-name: CICD Admin                                                          
-                                                                          
-on:                                                                       
-  push:                                                                   
-    branches:                                                             
-      - dev                                                               
-                                                                          
-env:                                                                      
+name: CICD Admin
+
+on:
+  push:
+    branches:
+      - dev
+
+env:                                                          
   BRANCH: dev                                                            
   AWS_REGION: us-east-1                                                   
 
@@ -220,7 +220,7 @@ jobs:
 
       ###############################################################
       # CHECKOUT DEV BRANCH
-      ###############################################################       
+      ###############################################################
       - name: Checkout Dev Branch
         id: checkout-dev-branch
         if: ${{ steps.get-slack-gha-notify-bot-token.outcome == 'success' }}
@@ -259,7 +259,7 @@ jobs:
           echo "COMMIT_MESSAGE_3=$(echo \"${{ env.COMMIT_MESSAGE_1 }}\")" >> $GITHUB_ENV
 
       ###############################################################
-      # OPEN PR
+      # OPEN PR (GHA BOT)
       ###############################################################
       - name: Open PR
         id: open-pr
@@ -283,7 +283,7 @@ jobs:
           echo ${{ env.GH_ADMIN_TOKEN }} | gh auth login --with-token
 
       ###############################################################
-      # MERGE PR
+      # MERGE PR (REPO ADMIN)
       ###############################################################
       - name: Merge PR
         id: merge-pr
@@ -487,10 +487,10 @@ jobs:
           payload: |
             channel: ${{ env.SLACK_CHANNEL_ID }}
             text: |
-              New commit:
-              Commit author: ${{ github.actor }}  
-              Commit Message: ${{ env.COMMIT_MESSAGE_2 }}
-              Commit CICD status: ${{ job.status }} :white_check_mark: :clap: 
+              New repo commit:
+              Commit author:       ${{ github.actor }}  
+              Commit Message:      ${{ env.COMMIT_MESSAGE_2 }}
+              Commit CICD status:  ${{ job.status }} :white_check_mark: :clap:
 
       ###############################################################
       # NOTIFY SLACK CHANNEL (FAILURE)
@@ -505,9 +505,9 @@ jobs:
           payload: |
             channel: ${{ env.SLACK_CHANNEL_ID }}
             text: |
-              New commit:
-              Commit author: ${{ github.actor }}  
-              Commit Message: ${{ env.COMMIT_MESSAGE_2 }}
-              Commit CICD status: ${{ job.status }} :x: :cold_sweat:
+              New repo commit:
+              Commit author:       ${{ github.actor }}  
+              Commit Message:      ${{ env.COMMIT_MESSAGE_2 }}
+              Commit CICD status:  ${{ job.status }} :x: :cold_sweat:
 
 ######################################## APACHEPLAYGROUND™ ########################################
