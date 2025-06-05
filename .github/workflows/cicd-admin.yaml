@@ -200,7 +200,7 @@ jobs:
         id: git-config-user
         if: ${{ steps.checkout-repo.outcome == 'success' }}
         run: |
-          git config user.name ${{ env.GH_ADMIN_USER_NAME }}
+          git config user.name ronfontebo
           git config user.email ${{ env.GH_ADMIN_USER_EMAIL }}
 
       - name: Get Commit Message 1
@@ -397,7 +397,7 @@ jobs:
         run: |
           git config get user.name
           git config get user.email
-          
+
           git status
           git add .
           git commit -m ${{ env.COMMIT_MESSAGE_3 }}
