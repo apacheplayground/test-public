@@ -389,7 +389,7 @@ jobs:
 
       ###############################################################
       # UPDATE CHANGELOG
-      ###############################################################  
+      ###############################################################
       - name: Update Changelog
         id: update-changelog
         if: ${{ steps.define-update-type.outcome == 'success' }}
@@ -488,9 +488,9 @@ jobs:
             channel: ${{ env.SLACK_CHANNEL_ID }}
             text: |
               New repo commit:
-              Commit author:       ${{ github.actor }}  
-              Commit Message:      ${{ env.COMMIT_MESSAGE_2 }}
-              Commit CICD status:  ${{ job.status }} :white_check_mark: :clap:
+              Commit author:          ${{ github.actor }}  
+              Commit Message:        ${{ env.COMMIT_MESSAGE_2 }}
+              Commit CICD status:   ${{ job.status }} :white_check_mark: :clap:
 
       ###############################################################
       # NOTIFY SLACK CHANNEL (FAILURE)
@@ -506,8 +506,8 @@ jobs:
             channel: ${{ env.SLACK_CHANNEL_ID }}
             text: |
               New repo commit:
-              Commit author:       ${{ github.actor }}  
-              Commit Message:      ${{ env.COMMIT_MESSAGE_2 }}
-              Commit CICD status:  ${{ job.status }} :x: :cold_sweat:
+              Commit author:          ${{ github.actor }}  
+              Commit Message:        ${{ env.COMMIT_MESSAGE_2 }}
+              Commit CICD status:   ${{ job.status }} :x: :cold_sweat:
 
 ######################################## APACHEPLAYGROUND™ ########################################

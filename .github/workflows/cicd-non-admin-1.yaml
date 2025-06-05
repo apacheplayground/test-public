@@ -131,6 +131,9 @@ jobs:
         id: checkout-dev-branch
         if: ${{ steps.get-slack-gha-notify-bot-token.outcome == 'success' }}
         uses: actions/checkout@v4
+        with:
+          ref: dev
+          fetch-depth: 0
 
       ###############################################################
       # GET COMMIT MSG
@@ -172,8 +175,8 @@ jobs:
             channel: ${{ env.SLACK_CHANNEL_ID }}
             text: |
               New PR:
-              PR author: ${{ github.actor }}
-              PR URL: ${{ env.PR_URL }}
+              PR author:   ${{ github.actor }}
+              PR URL:     ${{ env.PR_URL }}
 
               @${{ env.GH_ADMIN_USER_NAME }}, checkout the PR and approve changes for merging.
 
