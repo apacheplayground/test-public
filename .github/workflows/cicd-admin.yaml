@@ -1,15 +1,15 @@
 name: CICD Admin                                                          # Configure AWS creds
                                                                           # Pull sensitive variables from AWS SSM Parameter Store 
-on:                                                                       # Checkout repo
-  push:                                                                   # Open PR in main branch (as GHA bot)
-    branches:                                                             # Login to GH CLI        (as repo admin)
-     - dev                                                                # Merge PR               (as repo admin)
-                                                                          # Update CHANGELOG
-env:                                                                      # Update README
-  BRANCH: dev                                                             # Commit & push updates
-  AWS_REGION: us-east-1                                                   # Tag & push next version
-                                                                          # Notfiy Slack channel                                         
-  GH_ADMIN_USER_NAME_PARAMETER: AP_GH_ADMIN_USER_NAME 
+on:                                                                       # Config git user (globally)
+  push:                                                                   # Checkout repo
+    branches:                                                             # Open PR in main branch (as GHA bot)
+      - dev                                                               # Login to GH CLI        (as repo admin)
+                                                                          # Merge PR               (as repo admin)
+env:                                                                      # Update CHANGELOG
+  BRANCH: dev                                                             # Update README
+  AWS_REGION: us-east-1                                                   # Commit & push updates
+                                                                          # Notfiy Slack channel
+  GH_ADMIN_USER_NAME_PARAMETER: AP_GH_ADMIN_USER_NAME                                                            
   GH_ADMIN_USER_EMAIL_PARAMETER: AP_GH_ADMIN_USER_EMAIL
   GH_ADMIN_TOKEN_PARAMETER: AP_GH_ADMIN_TOKEN
   SLACK_GHA_NOTIFY_BOT_TOKEN_PARAMETER: AP_SLACK_GHA_NOTIFY_BOT_TOKEN
@@ -191,21 +191,21 @@ jobs:
             --with-decryption \
             --output text)" >> $GITHUB_ENV
 
-      - name: Checkout Repo
-        id: checkout-repo
-        if: ${{ steps.get-slack-gha-notify-bot-token.outcome == 'success' }}
-        uses: actions/checkout@v4
-
       - name: Git Config User
         id: git-config-user
-        if: ${{ steps.checkout-repo.outcome == 'success' }}
+        if: ${{ steps.get-slack-gha-notify-bot-token.outcome == 'success' }}
         run: |
-          git config user.name ronfontebo
-          git config user.email ${{ env.GH_ADMIN_USER_EMAIL }}
+          git config --global user.name ${{ env.GH_ADMIN_USER_NAME }}
+          git config --global user.email ${{ env.GH_ADMIN_USER_EMAIL }}
+
+      - name: Checkout Repo
+        id: checkout-repo
+        if: ${{ steps.git-config-user.outcome == 'success' }}
+        uses: actions/checkout@v4
 
       - name: Get Commit Message 1
         id: get-commit-message-1
-        if: ${{ steps.git-config-user.outcome == 'success' }}        
+        if: ${{ steps.checkout-repo.outcome == 'success' }}        
         run: |
           echo "COMMIT_MESSAGE_1=$(echo \"${{ github.event.head_commit.message }}\")" >> $GITHUB_ENV
 

@@ -150,24 +150,24 @@ jobs:
             --with-decryption \
             --output text)" >> $GITHUB_ENV
 
+      - name: Git Config User
+        id: git-config-user
+        if: ${{ steps.get-slack-gha-notify-bot-token.outcome == 'success' }}
+        run: |
+          git config --global user.name ${{ env.GH_ADMIN_USER_NAME }}
+          git config --global user.email ${{ env.GH_ADMIN_USER_EMAIL }}
+
       - name: Checkout Repo and Switch to Dev Branch
         id: checkout-repo
-        if: ${{ steps.get-slack-gha-notify-bot-token.outcome == 'success' }}
+        if: ${{ steps.git-config-user.outcome == 'success' }}
         uses: actions/checkout@v4
         with:
           ref: dev
           fetch-depth: 0
 
-      - name: Git Config User
-        id: git-config-user
-        if: ${{ steps.checkout-repo.outcome == 'success' }}
-        run: |
-          git config user.name ${{ env.GH_ADMIN_USER_NAME }}
-          git config user.email ${{ env.GH_ADMIN_USER_EMAIL }}
-
       - name: Get Commit Author
         id: get-commit-author
-        if: ${{ steps.git-config-user.outcome == 'success' }}
+        if: ${{ steps.checkout-repo.outcome == 'success' }}
         run: |
           echo "COMMIT_AUTHOR=$(echo \"${{ github.event.head_commit.author.name }}\")" >> $GITHUB_ENV
 
