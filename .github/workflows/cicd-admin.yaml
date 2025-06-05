@@ -395,6 +395,9 @@ jobs:
         id: commit-and-push-updates
         if: ${{ steps.update-changelog.outcome == 'success' }}
         run: |
+          git config get user.name
+          git config get user.email
+          
           git status
           git add .
           git commit -m ${{ env.COMMIT_MESSAGE_3 }}
