@@ -402,13 +402,12 @@ jobs:
         id: commit-and-push-updates
         if: ${{ steps.update-changelog.outcome == 'success' }}
         run: |
-          git config get user.name
-          git config get user.email
+          echo ${{ github.repository }}
 
           git status
           git add .
           git commit -m ${{ env.COMMIT_MESSAGE_3 }}
-          git push origin
+          git push https://x-access-token:${{ env.GH_ADMIN_TOKEN }}@github.com/${{ github.repository }}.git HEAD:main
 
       - name: Notify Slack Channel Success
         id: notify-slack-channel-success
