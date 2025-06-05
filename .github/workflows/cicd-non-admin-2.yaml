@@ -193,52 +193,52 @@ jobs:
           ref: main
           fetch-depth: 0
 
-      - name: Generate next version tag
-        id: generate-next-version-tag
+      - name: Define Update Type
+        id: define-update-type
         if: ${{ steps.switch-back-to-main-branch.outcome == 'success' }}
         run: |
-          define_version_update_type() {
+          define_update_type() {
             echo "Commit Message: ${{ env.COMMIT_MESSAGE_2 }}"
 
             echo "${{ env.COMMIT_MESSAGE_2 }}" | grep "feat-ma" > /dev/null
-            MAJOR_VERSION_UPDATE_FOUND=$?
+            MAJOR_UPDATE_FOUND=$?
 
-            if [[ $MAJOR_VERSION_UPDATE_FOUND == "0" ]];
+            if [[ $MAJOR_UPDATE_FOUND == "0" ]];
             then
-              VERSION_UPDATE_TYPE_1=major
-              VERSION_UPDATE_TYPE_2=major
+              UPDATE_TYPE_1=major
+              UPDATE_TYPE_2=major
             else
               echo "${{ env.COMMIT_MESSAGE_2 }}" | grep "feat-mi" > /dev/null
-              MINOR_VERSION_UPDATE_FOUND=$?
+              MINOR_UPDATE_FOUND=$?
 
-              if [[ $MINOR_VERSION_UPDATE_FOUND == "0" ]];
+              if [[ $MINOR_UPDATE_FOUND == "0" ]];
               then
-                VERSION_UPDATE_TYPE_1=minor
-                VERSION_UPDATE_TYPE_2=minor
+                UPDATE_TYPE_1=minor
+                UPDATE_TYPE_2=minor
               else
                 echo "${{ env.COMMIT_MESSAGE_2 }}" | grep "bugfix" > /dev/null
-                BUGFIX_VERSION_UPDATE_FOUND=$?
+                BUGFIX_UPDATE_FOUND=$?
 
-                if [[ $BUGFIX_VERSION_UPDATE_FOUND == "0" ]];
+                if [[ $BUGFIX_UPDATE_FOUND == "0" ]];
                 then
-                  VERSION_UPDATE_TYPE_1=patch
-                  VERSION_UPDATE_TYPE_2=bugfix             
+                  UPDATE_TYPE_1=patch
+                  UPDATE_TYPE_2=bugfix             
                 else
                   echo "${{ env.COMMIT_MESSAGE_2 }}" | grep "hotfix" > /dev/null
-                  HOTFIX_VERSION_UPDATE_FOUND=$?
+                  HOTFIX_UPDATE_FOUND=$?
 
-                  if [[ $HOTFIX_VERSION_UPDATE_FOUND == "0" ]];
+                  if [[ $HOTFIX_UPDATE_FOUND == "0" ]];
                   then
-                    VERSION_UPDATE_TYPE_1=patch
-                    VERSION_UPDATE_TYPE_2=hotfix                  
+                    UPDATE_TYPE_1=patch
+                    UPDATE_TYPE_2=hotfix                  
                   else
                     echo "${{ env.COMMIT_MESSAGE_2 }}" | grep "docsfix" > /dev/null
-                    DOCSFIX_VERSION_UPDATE_FOUND=$?
+                    DOCSFIX_UPDATE_FOUND=$?
 
-                    if [[ $DOCSFIX_VERSION_UPDATE_FOUND == "0" ]];
+                    if [[ $DOCSFIX_UPDATE_FOUND == "0" ]];
                     then
-                      VERSION_UPDATE_TYPE_1=none
-                      VERSION_UPDATE_TYPE_2=docsfix
+                      UPDATE_TYPE_1=none
+                      UPDATE_TYPE_2=docsfix
                     else
                       echo "|"
                       echo "| Error: Invalid commit message"
@@ -252,80 +252,20 @@ jobs:
               fi
             fi
 
-            echo "VERSION_UPDATE_TYPE_1=$VERSION_UPDATE_TYPE_1" >> $GITHUB_ENV
-            echo "VERSION_UPDATE_TYPE_2=$VERSION_UPDATE_TYPE_2" >> $GITHUB_ENV
+            echo "UPDATE_TYPE_1=$UPDATE_TYPE_1" >> $GITHUB_ENV
+            echo "UPDATE_TYPE_2=$UPDATE_TYPE_2" >> $GITHUB_ENV
 
-            echo VERSION_UPDATE_TYPE_1=$VERSION_UPDATE_TYPE_1
-            echo VERSION_UPDATE_TYPE_2=$VERSION_UPDATE_TYPE_2
-          }
-
-          generate_next_version_tag() {
-            CURRENT_VERSION_TAG=$(git tag --list --sort=creatordate | tail -n 1 | sed -e "s|v||")
-
-            CURRENT_VERSION_MAJOR=$(echo $CURRENT_VERSION_TAG | cut -d '.' -f 1)
-            CURRENT_VERSION_MINOR=$(echo $CURRENT_VERSION_TAG | cut -d '.' -f 2)
-            CURRENT_VERSION_PATCH=$(echo $CURRENT_VERSION_TAG | cut -d '.' -f 3)
-
-            if [[ $VERSION_UPDATE_TYPE_1 == "major" ]];
-            then
-              NEXT_VERSION_MAJOR=$((CURRENT_VERSION_MAJOR + 1))
-              NEXT_VERSION_MINOR=0
-              NEXT_VERSION_PATCH=0
-            elif [[ $VERSION_UPDATE_TYPE_1 == "minor" ]];
-            then
-              NEXT_VERSION_MAJOR=$CURRENT_VERSION_MAJOR
-              NEXT_VERSION_MINOR=$((CURRENT_VERSION_MINOR + 1))
-              NEXT_VERSION_PATCH=0
-            else
-              if [[ $VERSION_UPDATE_TYPE_1 == "ptach" ]];
-              then
-                NEXT_VERSION_MAJOR=$CURRENT_VERSION_MAJOR
-                NEXT_VERSION_MINOR=$CURRENT_VERSION_MINOR
-                NEXT_VERSION_PATCH=$((CURRENT_VERSION_PATCH + 1))
-              else
-                NEXT_VERSION_MAJOR=$CURRENT_VERSION_MAJOR
-                NEXT_VERSION_MINOR=$CURRENT_VERSION_MINOR
-                NEXT_VERSION_PATCH=$CURRENT_VERSION_PATCH
-              fi
-            fi
-
-            NEXT_VERSION="$NEXT_VERSION_MAJOR.$NEXT_VERSION_MINOR.$NEXT_VERSION_PATCH"
-            echo $NEXT_VERSION
+            echo UPDATE_TYPE_1=$UPDATE_TYPE_1
+            echo UPDATE_TYPE_2=$UPDATE_TYPE_2
           }
 
           set +e
-          git fetch --tags
-          git tag --list | grep "v" > /dev/null
-          GIT_TAGS_FOUND=$?
-          echo "GIT_TAGS_FOUND=$GIT_TAGS_FOUND" >> $GITHUB_ENV
-
-          if [[ $GIT_TAGS_FOUND == "0" ]];
-          then
-            echo "Git tags found."
-            echo ""
-            echo "Existing Versions:"
-            echo "------------------"
-            git tag --list --sort=creatordate | grep "v"
-            echo ""
-
-            define_version_update_type
-
-            echo CURRENT_VERSION_TAG="$(git tag --list --sort=creatordate | tail -n 1)"
-            echo NEXT_VERSION_TAG=v"$(generate_next_version_tag)"
-
-            echo "CURRENT_VERSION_TAG=$(git tag --list --sort=creatordate | tail -n 1)" >> $GITHUB_ENV   
-            echo "NEXT_VERSION_TAG=v$(generate_next_version_tag)" >> $GITHUB_ENV
-          else
-            echo "No Git tags found"
-            echo "Preparing to tag initial release version"
-            echo NEXT_VERSION_TAG=v1.0.0
-            echo "NEXT_VERSION_TAG=v1.0.0" >> $GITHUB_ENV
-          fi
+          define_update_type
           set -e
 
       - name: Update changelog
         id: update-changelog
-        if: ${{ steps.generate-next-version-tag.outcome == 'success' }}
+        if: ${{ steps.define-update-type.outcome == 'success' }}
         run: |
           DATE=$(date +%m-%d-%Y)
 

@@ -253,65 +253,71 @@ jobs:
         id: define-update-type
         if: ${{ steps.switch-to-main-branch.outcome == 'success' }}
         run: |
-          echo "Commit Message: ${{ env.COMMIT_MESSAGE_2 }}"
+          define_update_type() {
+            echo "Commit Message: ${{ env.COMMIT_MESSAGE_2 }}"
 
-          echo "${{ env.COMMIT_MESSAGE_2 }}" | grep "feat-ma" > /dev/null
-          MAJOR_UPDATE_FOUND=$?
+            echo "${{ env.COMMIT_MESSAGE_2 }}" | grep "feat-ma" > /dev/null
+            MAJOR_UPDATE_FOUND=$?
 
-          if [[ $MAJOR_UPDATE_FOUND == "0" ]];
-          then
-            UPDATE_TYPE_1=major
-            UPDATE_TYPE_2=major
-          else
-            echo "${{ env.COMMIT_MESSAGE_2 }}" | grep "feat-mi" > /dev/null
-            MINOR_UPDATE_FOUND=$?
-
-            if [[ $MINOR_UPDATE_FOUND == "0" ]];
+            if [[ $MAJOR_UPDATE_FOUND == "0" ]];
             then
-              UPDATE_TYPE_1=minor
-              UPDATE_TYPE_2=minor
+              UPDATE_TYPE_1=major
+              UPDATE_TYPE_2=major
             else
-              echo "${{ env.COMMIT_MESSAGE_2 }}" | grep "bugfix" > /dev/null
-              BUGFIX_UPDATE_FOUND=$?
+              echo "${{ env.COMMIT_MESSAGE_2 }}" | grep "feat-mi" > /dev/null
+              MINOR_UPDATE_FOUND=$?
 
-              if [[ $BUGFIX_UPDATE_FOUND == "0" ]];
+              if [[ $MINOR_UPDATE_FOUND == "0" ]];
               then
-                UPDATE_TYPE_1=patch
-                UPDATE_TYPE_2=bugfix             
+                UPDATE_TYPE_1=minor
+                UPDATE_TYPE_2=minor
               else
-                echo "${{ env.COMMIT_MESSAGE_2 }}" | grep "hotfix" > /dev/null
-                HOTFIX_UPDATE_FOUND=$?
+                echo "${{ env.COMMIT_MESSAGE_2 }}" | grep "bugfix" > /dev/null
+                BUGFIX_UPDATE_FOUND=$?
 
-                if [[ $HOTFIX_UPDATE_FOUND == "0" ]];
+                if [[ $BUGFIX_UPDATE_FOUND == "0" ]];
                 then
                   UPDATE_TYPE_1=patch
-                  UPDATE_TYPE_2=hotfix                  
+                  UPDATE_TYPE_2=bugfix             
                 else
-                  echo "${{ env.COMMIT_MESSAGE_2 }}" | grep "docsfix" > /dev/null
-                  DOCSFIX_UPDATE_FOUND=$?
+                  echo "${{ env.COMMIT_MESSAGE_2 }}" | grep "hotfix" > /dev/null
+                  HOTFIX_UPDATE_FOUND=$?
 
-                  if [[ $DOCSFIX_UPDATE_FOUND == "0" ]];
+                  if [[ $HOTFIX_UPDATE_FOUND == "0" ]];
                   then
-                    UPDATE_TYPE_1=none
-                    UPDATE_TYPE_2=docsfix
+                    UPDATE_TYPE_1=patch
+                    UPDATE_TYPE_2=hotfix                  
                   else
-                    echo "|"
-                    echo "| Error: Invalid commit message"
-                    echo "|"
-                    echo "| Commit message must follow the format '<type>/<message>'."
-                    echo "| Where 'type' can be feat-ma, feat-mi, bugfix, hotfix or docsfix."
-                    echo "|"
+                    echo "${{ env.COMMIT_MESSAGE_2 }}" | grep "docsfix" > /dev/null
+                    DOCSFIX_UPDATE_FOUND=$?
+
+                    if [[ $DOCSFIX_UPDATE_FOUND == "0" ]];
+                    then
+                      UPDATE_TYPE_1=none
+                      UPDATE_TYPE_2=docsfix
+                    else
+                      echo "|"
+                      echo "| Error: Invalid commit message"
+                      echo "|"
+                      echo "| Commit message must follow the format '<type>/<message>'."
+                      echo "| Where 'type' can be feat-ma, feat-mi, bugfix, hotfix or docsfix."
+                      echo "|"
+                    fi
                   fi
                 fi
               fi
             fi
-          fi
 
-          echo "UPDATE_TYPE_1=$UPDATE_TYPE_1" >> $GITHUB_ENV
-          echo "UPDATE_TYPE_2=$UPDATE_TYPE_2" >> $GITHUB_ENV
+            echo "UPDATE_TYPE_1=$UPDATE_TYPE_1" >> $GITHUB_ENV
+            echo "UPDATE_TYPE_2=$UPDATE_TYPE_2" >> $GITHUB_ENV
 
-          echo UPDATE_TYPE_1=$UPDATE_TYPE_1
-          echo UPDATE_TYPE_2=$UPDATE_TYPE_2
+            echo UPDATE_TYPE_1=$UPDATE_TYPE_1
+            echo UPDATE_TYPE_2=$UPDATE_TYPE_2
+          }
+
+          set +e
+          define_update_type
+          set -e
 
       - name: Update Changelog
         id: update-changelog
