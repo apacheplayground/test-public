@@ -1,9 +1,9 @@
-name: CICD Non-admin 1                                                    # Configure AWS creds
-                                                                          # Pull sensitive variables from AWS SSM Parameter Store 
-on:                                                                       # Checkout repo
-  push:                                                                   # Open PR in main branch (as GHA bot)
-    branches:                                                             # Send PR URL to Slack channel / Notify if failure
-      - dev                                                               
+name: CICD Non-admin 1
+
+on:
+  push:
+    branches:
+      - dev         
 
 env:
   BRANCH: dev
@@ -22,6 +22,9 @@ jobs:
       contents: write
       pull-requests: write
     steps:
+      ###############################################################
+      # CONFIGURE AWS CREDS
+      ###############################################################
       - name: Configure AWS credentials
         id: configure-aws-credentials
         uses: aws-actions/configure-aws-credentials@v4
@@ -29,6 +32,9 @@ jobs:
           role-to-assume: ${{ secrets.AP_AWS_GHA_OIDC_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
 
+      ###############################################################
+      # CHECK GH_ADMIN_USER_NAME
+      ###############################################################
       - name: Check for GH_ADMIN_USER_NAME in AWS SSM Parameter Store
         id: check-gh-admin-user-name
         if: ${{ steps.configure-aws-credentials.outcome == 'success' }}
@@ -51,6 +57,9 @@ jobs:
             echo "GH_ADMIN_USER_NAME not found."
           fi
 
+      ###############################################################
+      # GET GH_ADMIN_USER_NAME
+      ###############################################################
       - name: Get GH_ADMIN_USER_NAME from AWS SSM Parameter Store
         id: get-gh-admin-user-name
         if: ${{ steps.check-gh-admin-user-name.outcome == 'success' && env.GH_ADMIN_USER_NAME_FOUND == '0' }}
@@ -69,6 +78,9 @@ jobs:
             --with-decryption \
             --output text)" >> $GITHUB_ENV
 
+      ###############################################################
+      # CHECK SLACK_GHA_NOTIFY_BOT_TOKEN
+      ###############################################################
       - name: Check for SLACK_GHA_NOTIFY_BOT_TOKEN in AWS SSM Parameter Store
         id: check-slack-gha-notify-bot-token
         if: ${{ steps.get-gh-admin-user-name.outcome == 'success' }}
@@ -91,6 +103,9 @@ jobs:
             echo "SLACK_GHA_NOTIFY_BOT_TOKEN not found."
           fi
 
+      ###############################################################
+      # GET SLACK_GHA_NOTIFY_BOT_TOKEN
+      ###############################################################
       - name: Get SLACK_GHA_NOTIFY_BOT_TOKEN from AWS SSM Parameter Store
         id: get-slack-gha-notify-bot-token
         if: ${{ steps.check-slack-gha-notify-bot-token.outcome == 'success' && env.SLACK_GHA_NOTIFY_BOT_TOKEN_FOUND == '0' }}
@@ -109,17 +124,26 @@ jobs:
             --with-decryption \
             --output text)" >> $GITHUB_ENV
 
-      - name: Checkout Repo
-        id: checkout-repo
+      ###############################################################
+      # CHECKOUT DEV BRANCH
+      ###############################################################
+      - name: Checkout Dev Branch
+        id: checkout-dev-branch
         if: ${{ steps.get-slack-gha-notify-bot-token.outcome == 'success' }}
         uses: actions/checkout@v4
 
+      ###############################################################
+      # GET COMMIT MSG
+      ###############################################################
       - name: Get Commit Message
         id: get-commit-message
-        if: ${{ steps.checkout-repo.outcome == 'success' }}        
+        if: ${{ steps.checkout-dev-branch.outcome == 'success' }}
         run: |
           echo "COMMIT_MESSAGE=$(echo \"${{ github.event.head_commit.message }}\")" >> $GITHUB_ENV
 
+      ###############################################################
+      # OPEN PR (GHA BOT)
+      ###############################################################
       - name: Open PR
         id: open-pr
         if: ${{ steps.get-commit-message.outcome == 'success' }}
@@ -134,6 +158,9 @@ jobs:
 
           echo "PR_URL=$(cat /tmp/pr-url.txt)" >> $GITHUB_ENV
 
+      ###############################################################
+      # SEND PR URL TO SLACK CHANNEL (SUCCESS)
+      ###############################################################
       - name: Send PR URL to Slack Channel
         id: send-pr-url-to-slack-channel
         if: ${{ steps.open-pr.outcome == 'success' }}
@@ -150,6 +177,9 @@ jobs:
 
               @${{ env.GH_ADMIN_USER_NAME }}, checkout the PR and approve changes for merging.
 
+      ###############################################################
+      # NOTIFY SLACK CHANNEL (FAILURE)
+      ###############################################################
       - name: Notify Slack Channel Failure
         id: notify-slack-channel-failure
         if: ${{ steps.open-pr.outcome == 'failure' }}
