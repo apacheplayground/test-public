@@ -1,15 +1,15 @@
-name: CICD Admin                                                          # Configure AWS creds
-                                                                          # Pull sensitive variables from AWS SSM Parameter Store 
-on:                                                                       # Config git user globally        (repo admin)
-  push:                                                                   # Checkout dev branch
-    branches:                                                             # Open PR from dev to main branch (as GHA bot)
-      - dev                                                               # Login to GH CLI                 (as repo admin)
-                                                                          # Merge PR                        (as repo admin)
-env:                                                                      # Checkout main branch            (with admin PAT)
-  BRANCH: dev                                                             # Define update type
-  AWS_REGION: us-east-1                                                   # Update CHANGELOG
-                                                                          # Commit & push updates
-  GH_ADMIN_USER_NAME_PARAMETER: AP_GH_ADMIN_USER_NAME                     # Notfiy Slack channel            (success/failure)                                      
+name: CICD Admin                                                          
+                                                                          
+on:                                                                       
+  push:                                                                   
+    branches:                                                             
+      - dev                                                               
+                                                                          
+env:                                                                      
+  BRANCH: dev                                                            
+  AWS_REGION: us-east-1                                                   
+
+  GH_ADMIN_USER_NAME_PARAMETER: AP_GH_ADMIN_USER_NAME
   GH_ADMIN_USER_EMAIL_PARAMETER: AP_GH_ADMIN_USER_EMAIL
   GH_ADMIN_TOKEN_PARAMETER: AP_GH_ADMIN_TOKEN
   SLACK_GHA_NOTIFY_BOT_TOKEN_PARAMETER: AP_SLACK_GHA_NOTIFY_BOT_TOKEN
@@ -24,6 +24,9 @@ jobs:
       contents: write
       pull-requests: write
     steps:
+      ###############################################################
+      # CONFIGURE AWS CREDS
+      ###############################################################
       - name: Configure AWS credentials
         id: configure-aws-credentials
         uses: aws-actions/configure-aws-credentials@v4
@@ -31,6 +34,9 @@ jobs:
           role-to-assume: ${{ secrets.AP_AWS_GHA_OIDC_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
 
+      ###############################################################
+      # CHECK GH_ADMIN_USER_NAME
+      ###############################################################
       - name: Check for GH_ADMIN_USER_NAME in AWS SSM Parameter Store
         id: check-gh-admin-user-name
         if: ${{ steps.configure-aws-credentials.outcome == 'success' }}
@@ -53,6 +59,9 @@ jobs:
             echo "GH_ADMIN_USER_NAME not found."
           fi
 
+      ###############################################################
+      # GET GH_ADMIN_USER_NAME
+      ###############################################################
       - name: Get GH_ADMIN_USER_NAME from AWS SSM Parameter Store
         id: get-gh-admin-user-name
         if: ${{ steps.check-gh-admin-user-name.outcome == 'success' && env.GH_ADMIN_USER_NAME_FOUND == '0' }}
@@ -71,6 +80,9 @@ jobs:
             --with-decryption \
             --output text)" >> $GITHUB_ENV
 
+      ###############################################################
+      # CHECK GH_ADMIN_USER_EMAIL
+      ###############################################################
       - name: Check for GH_ADMIN_USER_EMAIL in AWS SSM Parameter Store
         id: check-gh-admin-user-email
         if: ${{ steps.get-gh-admin-user-name.outcome == 'success' }}
@@ -93,6 +105,9 @@ jobs:
             echo "GH_ADMIN_USER_EMAIL not found."
           fi
 
+      ###############################################################
+      # GET GH_ADMIN_USER_EMAIL
+      ###############################################################
       - name: Get GH_ADMIN_USER_EMAIL from AWS SSM Parameter Store
         id: get-gh-admin-user-email
         if: ${{ steps.check-gh-admin-user-email.outcome == 'success' && env.GH_ADMIN_USER_EMAIL_FOUND == '0' }}
@@ -111,6 +126,9 @@ jobs:
             --with-decryption \
             --output text)" >> $GITHUB_ENV
 
+      ###############################################################
+      # CHECK GH_ADMIN_TOKEN
+      ###############################################################
       - name: Check for GH_ADMIN_TOKEN in AWS SSM Parameter Store
         id: check-gh-admin-token
         if: ${{ steps.get-gh-admin-user-email.outcome == 'success' }}
@@ -133,6 +151,9 @@ jobs:
             echo "GH_ADMIN_TOKEN not found."
           fi
 
+      ###############################################################
+      # GET GH_ADMIN_TOKEN
+      ###############################################################
       - name: Get GH_ADMIN_TOKEN from AWS SSM Parameter Store
         id: get-gh-admin-token
         if: ${{ steps.check-gh-admin-token.outcome == 'success' && env.GH_ADMIN_TOKEN_FOUND == '0' }}
@@ -151,6 +172,9 @@ jobs:
             --with-decryption \
             --output text)" >> $GITHUB_ENV
 
+      ###############################################################
+      # CHECK SLACK_GHA_NOTIFY_BOT_TOKEN
+      ###############################################################
       - name: Check for SLACK_GHA_NOTIFY_BOT_TOKEN in AWS SSM Parameter Store
         id: check-slack-gha-notify-bot-token
         if: ${{ steps.get-gh-admin-token.outcome == 'success' }}
@@ -173,6 +197,9 @@ jobs:
             echo "SLACK_GHA_NOTIFY_BOT_TOKEN not found."
           fi
 
+      ###############################################################
+      # GET SLACK_GHA_NOTIFY_BOT_TOKEN
+      ###############################################################
       - name: Get SLACK_GHA_NOTIFY_BOT_TOKEN from AWS SSM Parameter Store
         id: get-slack-gha-notify-bot-token
         if: ${{ steps.check-slack-gha-notify-bot-token.outcome == 'success' && env.SLACK_GHA_NOTIFY_BOT_TOKEN_FOUND == '0' }}
@@ -191,27 +218,39 @@ jobs:
             --with-decryption \
             --output text)" >> $GITHUB_ENV
 
-      - name: Git Config User Global
-        id: git-config-user-global
-        if: ${{ steps.get-slack-gha-notify-bot-token.outcome == 'success' }}
-        run: |
-          git config --global user.name ${{ env.GH_ADMIN_USER_NAME }}
-          git config --global user.email ${{ env.GH_ADMIN_USER_EMAIL }}
-
+      ###############################################################
+      # CHECKOUT DEV BRANCH
+      ###############################################################       
       - name: Checkout Dev Branch
         id: checkout-dev-branch
-        if: ${{ steps.git-config-user-global.outcome == 'success' }}
+        if: ${{ steps.get-slack-gha-notify-bot-token.outcome == 'success' }}
         uses: actions/checkout@v4
         with:
           ref: dev
           fetch-depth: 0
 
+      ###############################################################
+      # GIT CONFIG USER DEV
+      ############################################################### 
+      - name: Git Config User Dev
+        id: git-config-user-dev
+        if: ${{ steps.checkout-dev-branch.outcome == 'success' }}
+        run: |
+          git config user.name ${{ env.GH_ADMIN_USER_NAME }}
+          git config user.email ${{ env.GH_ADMIN_USER_EMAIL }}
+
+      ###############################################################
+      # GET COMMIT MSG 1
+      ###############################################################
       - name: Get Commit Message 1
         id: get-commit-message-1
-        if: ${{ steps.checkout-repo.outcome == 'success' }}  
+        if: ${{ steps.git-config-user-dev.outcome == 'success' }}  
         run: |
           echo "COMMIT_MESSAGE_1=$(echo \"${{ github.event.head_commit.message }}\")" >> $GITHUB_ENV
 
+      ###############################################################
+      # GET COMMIT MSG 2 & 3
+      ###############################################################
       - name: Get commit message 2 and 3
         id: get-commit-message-2-and-3
         if: ${{ steps.get-commit-message-1.outcome == 'success' }}
@@ -219,6 +258,9 @@ jobs:
           echo "COMMIT_MESSAGE_2=${{ env.COMMIT_MESSAGE_1 }}" >> $GITHUB_ENV
           echo "COMMIT_MESSAGE_3=$(echo \"${{ env.COMMIT_MESSAGE_1 }}\")" >> $GITHUB_ENV
 
+      ###############################################################
+      # OPEN PR
+      ###############################################################
       - name: Open PR
         id: open-pr
         if: ${{ steps.get-commit-message-2-and-3.outcome == 'success' }}
@@ -231,18 +273,27 @@ jobs:
             --title ${{ env.COMMIT_MESSAGE_1 }} \
             --body ${{ env.COMMIT_MESSAGE_1 }}
           
+      ###############################################################
+      # AUTH GH CLI
+      ###############################################################          
       - name: Authenticate GitHub CLI
         id: authenticate-github-cli
         if: ${{ steps.open-pr.outcome == 'success' }}
         run: |
           echo ${{ env.GH_ADMIN_TOKEN }} | gh auth login --with-token
 
+      ###############################################################
+      # MERGE PR
+      ###############################################################
       - name: Merge PR
         id: merge-pr
-        if: ${{ steps.open-pr.outcome == 'success' }}
+        if: ${{ steps.authenticate-github-cli.outcome == 'success' }}
         run: |
           gh pr merge --merge
 
+      ###############################################################
+      # CHECKOUT MAIN BRANCH
+      ###############################################################
       - name: Checkout Main Branch
         id: checkout-main-branch
         if: ${{ steps.merge-pr.outcome == 'success' }}
@@ -253,9 +304,22 @@ jobs:
           fetch-depth: 0
           token: ${{ env.GH_ADMIN_TOKEN }}
 
+      ###############################################################
+      # GIT CONFIG USER MAIN
+      ############################################################### 
+      - name: Git Config User Main
+        id: git-config-user-main
+        if: ${{ steps.checkout-main-branch.outcome == 'success' }}
+        run: |
+          git config user.name ${{ env.GH_ADMIN_USER_NAME }}
+          git config user.email ${{ env.GH_ADMIN_USER_EMAIL }}
+
+      ###############################################################
+      # DEFINE UPDATE TYPE
+      ###############################################################           
       - name: Define Update Type
         id: define-update-type
-        if: ${{ steps.checkout-main-branch.outcome == 'success' }}
+        if: ${{ steps.git-config-user-main.outcome == 'success' }}
         run: |
           define_update_type() {
             echo "Commit Message: ${{ env.COMMIT_MESSAGE_2 }}"
@@ -323,6 +387,9 @@ jobs:
           define_update_type
           set -e
 
+      ###############################################################
+      # UPDATE CHANGELOG
+      ###############################################################  
       - name: Update Changelog
         id: update-changelog
         if: ${{ steps.define-update-type.outcome == 'success' }}
@@ -395,6 +462,9 @@ jobs:
           fi
           set -e
 
+      ###############################################################
+      # COMMIT $ PUSH UPDATES
+      ############################################################### 
       - name: Commit and Push Updates
         id: commit-and-push-updates
         if: ${{ steps.update-changelog.outcome == 'success' }}
@@ -404,6 +474,9 @@ jobs:
           git commit -m ${{ env.COMMIT_MESSAGE_3 }}
           git push origin
 
+      ###############################################################
+      # NOTIFY SLACK CHANNEL (SUCCESS)
+      ############################################################### 
       - name: Notify Slack Channel Success
         id: notify-slack-channel-success
         if: ${{ steps.commit-and-push-updates.outcome == 'success' }}
@@ -419,6 +492,9 @@ jobs:
               Commit Message: ${{ env.COMMIT_MESSAGE_2 }}
               Commit CICD status: ${{ job.status }} :white_check_mark: :clap: 
 
+      ###############################################################
+      # NOTIFY SLACK CHANNEL (FAILURE)
+      ############################################################### 
       - name: Notify Slack Channel Failure
         id: notify-slack-channel-failure
         if: ${{ steps.commit-and-push-updates.outcome == 'failure' }}
