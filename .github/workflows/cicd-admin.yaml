@@ -402,12 +402,12 @@ jobs:
         id: commit-and-push-updates
         if: ${{ steps.update-changelog.outcome == 'success' }}
         run: |
-          echo ${{ github.repository }}
+          git remote set-url origin https://x-access-token:${{ env.GH_ADMIN_TOKEN }}@github.com/${{ github.repository }}.git
 
           git status
           git add .
           git commit -m ${{ env.COMMIT_MESSAGE_3 }}
-          git push https://x-access-token:${{ env.GH_ADMIN_TOKEN }}@github.com/${{ github.repository }}.git HEAD:main
+          git push origin main
 
       - name: Notify Slack Channel Success
         id: notify-slack-channel-success
