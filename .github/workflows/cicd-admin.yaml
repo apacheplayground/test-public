@@ -1,15 +1,15 @@
 name: CICD Admin                                                          # Configure AWS creds
                                                                           # Pull sensitive variables from AWS SSM Parameter Store 
-on:                                                                       
-  push:                                                                   # Checkout repo
-    branches:                                                             # Open PR in main branch (as GHA bot)
-      - dev                                                               # Login to GH CLI        (as repo admin)
-                                                                          # Merge PR               (as repo admin)
-env:                                                                      # Update CHANGELOG
-  BRANCH: dev                                                             # Update README
-  AWS_REGION: us-east-1                                                   # Commit & push updates
-                                                                          # Notfiy Slack channel
-  GH_ADMIN_USER_NAME_PARAMETER: AP_GH_ADMIN_USER_NAME                                                            
+on:                                                                       # Config git user globally        (repo admin)
+  push:                                                                   # Checkout dev branch
+    branches:                                                             # Open PR from dev to main branch (as GHA bot)
+      - dev                                                               # Login to GH CLI                 (as repo admin)
+                                                                          # Merge PR                        (as repo admin)
+env:                                                                      # Checkout main branch            (with admin PAT)
+  BRANCH: dev                                                             # Define update type
+  AWS_REGION: us-east-1                                                   # Update CHANGELOG
+                                                                          # Commit & push updates
+  GH_ADMIN_USER_NAME_PARAMETER: AP_GH_ADMIN_USER_NAME                     # Notfiy Slack channel            (success/failure)                                      
   GH_ADMIN_USER_EMAIL_PARAMETER: AP_GH_ADMIN_USER_EMAIL
   GH_ADMIN_TOKEN_PARAMETER: AP_GH_ADMIN_TOKEN
   SLACK_GHA_NOTIFY_BOT_TOKEN_PARAMETER: AP_SLACK_GHA_NOTIFY_BOT_TOKEN
@@ -191,21 +191,24 @@ jobs:
             --with-decryption \
             --output text)" >> $GITHUB_ENV
 
-      - name: Checkout Repo
-        id: checkout-repo
+      - name: Git Config User Global
+        id: git-config-user-global
         if: ${{ steps.get-slack-gha-notify-bot-token.outcome == 'success' }}
-        uses: actions/checkout@v4
-
-      - name: Git Config User 1
-        id: git-config-user-1
-        if: ${{ steps.checkout-repo.outcome == 'success' }}
         run: |
-          git config user.name ${{ env.GH_ADMIN_USER_NAME }}
-          git config user.email ${{ env.GH_ADMIN_USER_EMAIL }}
+          git config --global user.name ${{ env.GH_ADMIN_USER_NAME }}
+          git config --global user.email ${{ env.GH_ADMIN_USER_EMAIL }}
+
+      - name: Checkout Dev Branch
+        id: checkout-dev-branch
+        if: ${{ steps.git-config-user-global.outcome == 'success' }}
+        uses: actions/checkout@v4
+        with:
+          ref: dev
+          fetch-depth: 0
 
       - name: Get Commit Message 1
         id: get-commit-message-1
-        if: ${{ steps.git-config-user-1.outcome == 'success' }}  
+        if: ${{ steps.checkout-repo.outcome == 'success' }}  
         run: |
           echo "COMMIT_MESSAGE_1=$(echo \"${{ github.event.head_commit.message }}\")" >> $GITHUB_ENV
 
@@ -240,8 +243,8 @@ jobs:
         run: |
           gh pr merge --merge
 
-      - name: Switch to Main Branch
-        id: switch-to-main-branch
+      - name: Checkout Main Branch
+        id: checkout-main-branch
         if: ${{ steps.merge-pr.outcome == 'success' }}
         uses: actions/checkout@v4        
         with:
@@ -250,16 +253,9 @@ jobs:
           fetch-depth: 0
           token: ${{ env.GH_ADMIN_TOKEN }}
 
-      - name: Git Config User 2
-        id: git-config-user-2
-        if: ${{ steps.switch-to-main-branch.outcome == 'success' }}
-        run: |
-          git config user.name ${{ env.GH_ADMIN_USER_NAME }}
-          git config user.email ${{ env.GH_ADMIN_USER_EMAIL }}
-
       - name: Define Update Type
         id: define-update-type
-        if: ${{ steps.git-config-user-2.outcome == 'success' }}
+        if: ${{ steps.checkout-main-branch.outcome == 'success' }}
         run: |
           define_update_type() {
             echo "Commit Message: ${{ env.COMMIT_MESSAGE_2 }}"

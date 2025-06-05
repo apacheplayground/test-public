@@ -1,12 +1,12 @@
-name: CICD Non-admin 2                                        # Configure AWS creds
-                                                              # Pull sensitive variables from AWS SSM Parameter Store                                            # Open PR in main branch, 
-on:                                                           # Checkout repo 
-  pull_request:                                               # Update CHANGELOG
-    types:                                                    # Update README
-      - closed                                                # Commit & push updates
-    branches:                                                 # Tag & push next version
-      - main                                                  # Notfiy Slack channel
-
+name: CICD Non-admin 2                                                    # Configure AWS creds
+                                                                          # Pull sensitive variables from AWS SSM Parameter Store                                            # Open PR in main branch, 
+on:                                                                       # Config git user globally        (repo admin)
+  pull_request:                                                           # Checkout dev branch
+    types:                                                                # Checkout main branch            (with admin PAT)
+      - closed                                                            # Define update type
+    branches:                                                             # Update CHANGELOG
+      - main                                                              # Commit & push updates
+                                                                          # Notfiy Slack channel            (success/failure)
 env:
   AWS_REGION: us-east-1
 
@@ -150,24 +150,24 @@ jobs:
             --with-decryption \
             --output text)" >> $GITHUB_ENV
 
-      - name: Checkout Repo and Switch to Dev Branch
-        id: checkout-repo
+      - name: Git Config User Global
+        id: git-config-user-global
         if: ${{ steps.get-slack-gha-notify-bot-token.outcome == 'success' }}
+        run: |
+          git config --global user.name ${{ env.GH_ADMIN_USER_NAME }}
+          git config --global user.email ${{ env.GH_ADMIN_USER_EMAIL }}
+
+      - name: Checkout Dev Branch
+        id: checkout-dev-branch
+        if: ${{ steps.git-config-user-global.outcome == 'success' }}
         uses: actions/checkout@v4
         with:
           ref: dev
           fetch-depth: 0
 
-      - name: Git Config User 1
-        id: git-config-user-1
-        if: ${{ steps.checkout-repo.outcome == 'success' }}
-        run: |
-          git config user.name ${{ env.GH_ADMIN_USER_NAME }}
-          git config user.email ${{ env.GH_ADMIN_USER_EMAIL }}
-
       - name: Get Commit Author
         id: get-commit-author
-        if: ${{ steps.git-config-user-1.outcome == 'success' }}
+        if: ${{ steps.checkout-dev-branch.outcome == 'success' }}
         run: |
           echo "COMMIT_AUTHOR=$(echo \"${{ github.event.head_commit.author.name }}\")" >> $GITHUB_ENV
 
@@ -184,25 +184,19 @@ jobs:
           echo "COMMIT_MESSAGE_2=${{ env.COMMIT_MESSAGE_1 }}" >> $GITHUB_ENV
           echo "COMMIT_MESSAGE_3=$(echo \"${{ env.COMMIT_MESSAGE_1 }}\")" >> $GITHUB_ENV
 
-      - name: Switch back to main branch
-        id: switch-back-to-main-branch
+      - name: Checkout Main Branch
+        id: checkout-main-branch
         if: ${{ steps.get-commit-message-2-and-3.outcome == 'success' }}
         uses: actions/checkout@v4        
         with:
           repository: ${{ github.repository }}
           ref: main
           fetch-depth: 0
-
-      - name: Git Config User 2
-        id: git-config-user-2
-        if: ${{ steps.switch-back-to-main-branch.outcome == 'success' }}
-        run: |
-          git config user.name ${{ env.GH_ADMIN_USER_NAME }}
-          git config user.email ${{ env.GH_ADMIN_USER_EMAIL }}
+          token: ${{ env.GH_ADMIN_TOKEN }}
 
       - name: Define Update Type
         id: define-update-type
-        if: ${{ steps.git-config-user-2.outcome == 'success' }}
+        if: ${{ steps.checkout-main-branch.outcome == 'success' }}
         run: |
           define_update_type() {
             echo "Commit Message: ${{ env.COMMIT_MESSAGE_2 }}"
@@ -341,33 +335,18 @@ jobs:
           EOF
           fi
 
-      - name: Update README
-        id: update-readme
-        if: ${{ steps.update-changelog.outcome == 'success' }}
-        env:
-          BANNER_URL: https://github.com/apacheplayground/terraform-aws-s3-webserver/blob/main/assets/banner.jpg
-        run: |
-          sed -i "s|\./assets/banner\.jpg|${{ env.BANNER_URL }}|g" README.md
-
       - name: Commit and Push Updates
         id: commit-and-push-updates
-        if: ${{ steps.update-readme.outcome == 'success' }}
+        if: ${{ steps.update-changelog.outcome == 'success' }}
         run: |
           git status
           git add .
           git commit -m ${{ env.COMMIT_MESSAGE_3 }}
           git push origin
 
-      - name: Tag and Push Next Version
-        id: tag-and-push-next-version
-        if: ${{ steps.commit-and-push-updates.outcome == 'success' }}        
-        run: |
-          git tag -a ${{ env.NEXT_VERSION_TAG }} HEAD -m ${{ env.COMMIT_MESSAGE_3 }}
-          git push origin ${{ env.NEXT_VERSION_TAG }}
-
       - name: Notify Slack Channel Success
         id: notify-slack-channel-success
-        if: ${{ steps.tag-and-push-next-version.outcome == 'success' }}
+        if: ${{ steps.commit-and-push-updates.outcome == 'success' }}
         uses: slackapi/slack-github-action@v2.1.0
         with:
           method: chat.postMessage
@@ -382,7 +361,7 @@ jobs:
 
       - name: Notify Slack Channel Failure
         id: notify-slack-channel-failure
-        if: ${{ steps.tag-and-push-next-version.outcome == 'failure' }}
+        if: ${{ steps.commit-and-push-updates.outcome == 'failure' }}
         uses: slackapi/slack-github-action@v2.1.0
         with:
           method: chat.postMessage
