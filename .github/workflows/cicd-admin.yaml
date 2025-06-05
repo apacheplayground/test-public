@@ -248,6 +248,7 @@ jobs:
           repository: ${{ github.repository }}
           ref: main
           fetch-depth: 0
+          token: ${{ env.GH_ADMIN_TOKEN }}
 
       - name: Git Config User 2
         id: git-config-user-2
@@ -402,12 +403,10 @@ jobs:
         id: commit-and-push-updates
         if: ${{ steps.update-changelog.outcome == 'success' }}
         run: |
-          git remote set-url origin https://x-access-token:${{ env.GH_ADMIN_TOKEN }}@github.com/${{ github.repository }}.git
-
           git status
           git add .
           git commit -m ${{ env.COMMIT_MESSAGE_3 }}
-          git push origin main
+          git push origin
 
       - name: Notify Slack Channel Success
         id: notify-slack-channel-success
