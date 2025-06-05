@@ -1,6 +1,6 @@
 name: CICD Admin                                                          # Configure AWS creds
                                                                           # Pull sensitive variables from AWS SSM Parameter Store 
-on:                                                                       # Config git user (globally)
+on:                                                                       
   push:                                                                   # Checkout repo
     branches:                                                             # Open PR in main branch (as GHA bot)
       - dev                                                               # Login to GH CLI        (as repo admin)
@@ -191,21 +191,21 @@ jobs:
             --with-decryption \
             --output text)" >> $GITHUB_ENV
 
-      - name: Git Config User
-        id: git-config-user
-        if: ${{ steps.get-slack-gha-notify-bot-token.outcome == 'success' }}
-        run: |
-          git config --global user.name ${{ env.GH_ADMIN_USER_NAME }}
-          git config --global user.email ${{ env.GH_ADMIN_USER_EMAIL }}
-
       - name: Checkout Repo
         id: checkout-repo
-        if: ${{ steps.git-config-user.outcome == 'success' }}
+        if: ${{ steps.get-slack-gha-notify-bot-token.outcome == 'success' }}
         uses: actions/checkout@v4
+
+      - name: Git Config User 1
+        id: git-config-user-1
+        if: ${{ steps.checkout-repo.outcome == 'success' }}
+        run: |
+          git config user.name ${{ env.GH_ADMIN_USER_NAME }}
+          git config user.email ${{ env.GH_ADMIN_USER_EMAIL }}
 
       - name: Get Commit Message 1
         id: get-commit-message-1
-        if: ${{ steps.checkout-repo.outcome == 'success' }}        
+        if: ${{ steps.git-config-user-1.outcome == 'success' }}  
         run: |
           echo "COMMIT_MESSAGE_1=$(echo \"${{ github.event.head_commit.message }}\")" >> $GITHUB_ENV
 
@@ -249,9 +249,16 @@ jobs:
           ref: main
           fetch-depth: 0
 
+      - name: Git Config User 2
+        id: git-config-user-2
+        if: ${{ steps.switch-to-main-branch.outcome == 'success' }}
+        run: |
+          git config user.name ${{ env.GH_ADMIN_USER_NAME }}
+          git config user.email ${{ env.GH_ADMIN_USER_EMAIL }}
+
       - name: Define Update Type
         id: define-update-type
-        if: ${{ steps.switch-to-main-branch.outcome == 'success' }}
+        if: ${{ steps.git-config-user-2.outcome == 'success' }}
         run: |
           define_update_type() {
             echo "Commit Message: ${{ env.COMMIT_MESSAGE_2 }}"
