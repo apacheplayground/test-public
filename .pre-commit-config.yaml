@@ -3,32 +3,43 @@ repos:
   - repo: local
     hooks:
       - id: validate-commit-msg
-        name: Validate Commit msg
+        name: Validate Commit Message
         entry: sh .github/hooks/validate-commit-msg
         language: system
         types: [file]
         stages: [commit-msg]
 
-      - id: restrict-main-branch-commits-to-gha-runner
-        name: Restrict Main Branch Commits to GHA Runner
-        entry: sh .github/hooks/restrict-main-branch-commits-to-gha-runner
+      - id: restrict-main-branch-commits-to-gha-runners
+        name: Restrict Main Branch Commits to GHA Runners
+        entry: sh .github/hooks/restrict-main-branch-commits-to-gha-runners
         language: system
         types: [file]
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v5.0.0
     hooks:
       - id: check-executables-have-shebangs
+        name: Check Executables Have Shebangs
+
       #- id: check-shebang-scripts-are-executable
+      #  name: Check Shebang Scripts Are Executables
+
       - id: detect-aws-credentials
+        name: Detect AWS Credentials
         args: [--allow-missing-credentials]
+
       - id: check-merge-conflict
+        name: Check for Merge Conflicts
       #- id: end-of-file-fixer
   - repo: https://github.com/antonbabenko/pre-commit-terraform
     rev: v1.96.2
     hooks:
-      - id: terraform_fmt 
+      - id: terraform_fmt
+        name: Terraform Format
+
       - id: terraform_validate
+        name: Terraform Validate
         exclude: '^[^/]+$'
+        
       #- id: infracost_breakdown
 
 ######################################## APACHEPLAYGROUND™ ########################################
