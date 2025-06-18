@@ -12,8 +12,6 @@ env:
   GH_ADMIN_USER_NAME_PARAMETER: AP_GH_ADMIN_USER_NAME
   GH_ADMIN_USER_EMAIL_PARAMETER: AP_GH_ADMIN_USER_EMAIL
   GH_ADMIN_TOKEN_PARAMETER: AP_GH_ADMIN_TOKEN
-  SLACK_GHA_NOTIFY_BOT_TOKEN_PARAMETER: AP_SLACK_GHA_NOTIFY_BOT_TOKEN
-  SLACK_CHANNEL_ID: ${{ secrets.REPO_SLACK_CHANNEL_ID }}
 
 jobs:
   cicd-admin:
@@ -173,52 +171,6 @@ jobs:
             --output text)" >> $GITHUB_ENV
 
       ###############################################################
-      # CHECK SLACK_GHA_NOTIFY_BOT_TOKEN
-      ###############################################################
-      - name: Check for SLACK_GHA_NOTIFY_BOT_TOKEN in AWS SSM Parameter Store
-        id: check-slack-gha-notify-bot-token
-        if: ${{ steps.get-gh-admin-token.outcome == 'success' }}
-        run: |
-          aws ssm get-parameter \
-            --region "${{ env.AWS_REGION }}" \
-            --name "${{ env.SLACK_GHA_NOTIFY_BOT_TOKEN_PARAMETER }}" \
-            --query "Parameter.Value" \
-            --no-with-decryption \
-            --output text
-
-          SLACK_GHA_NOTIFY_BOT_TOKEN_FOUND=$?
-
-          if [[ $SLACK_GHA_NOTIFY_BOT_TOKEN_FOUND == '0' ]];
-          then
-            echo "SLACK_GHA_NOTIFY_BOT_TOKEN_FOUND=0" >> $GITHUB_ENV
-          else
-            echo "SLACK_GHA_NOTIFY_BOT_TOKEN_FOUND=1" >> $GITHUB_ENV
-
-            echo "SLACK_GHA_NOTIFY_BOT_TOKEN not found."
-          fi
-
-      ###############################################################
-      # GET SLACK_GHA_NOTIFY_BOT_TOKEN
-      ###############################################################
-      - name: Get SLACK_GHA_NOTIFY_BOT_TOKEN from AWS SSM Parameter Store
-        id: get-slack-gha-notify-bot-token
-        if: ${{ steps.check-slack-gha-notify-bot-token.outcome == 'success' && env.SLACK_GHA_NOTIFY_BOT_TOKEN_FOUND == '0' }}
-        run: |
-          echo "::add-mask::$(aws ssm get-parameter \
-            --region "${{ env.AWS_REGION }}" \
-            --name "${{ env.SLACK_GHA_NOTIFY_BOT_TOKEN_PARAMETER }}" \
-            --query "Parameter.Value" \
-            --with-decryption \
-            --output text)"
-          
-          echo "SLACK_GHA_NOTIFY_BOT_TOKEN=$(aws ssm get-parameter \
-            --region "${{ env.AWS_REGION }}" \
-            --name "${{ env.SLACK_GHA_NOTIFY_BOT_TOKEN_PARAMETER }}" \
-            --query "Parameter.Value" \
-            --with-decryption \
-            --output text)" >> $GITHUB_ENV
-
-      ###############################################################
       # CHECKOUT DEV BRANCH
       ###############################################################
       - name: Checkout Dev Branch
@@ -356,19 +308,19 @@ jobs:
                     UPDATE_TYPE_1=patch
                     UPDATE_TYPE_2=hotfix                  
                   else
-                    echo "${{ env.COMMIT_MESSAGE_2 }}" | grep "docsfix" > /dev/null
-                    DOCSFIX_UPDATE_FOUND=$?
+                    echo "${{ env.COMMIT_MESSAGE_2 }}" | grep "docfix" > /dev/null
+                    DOCFIX_UPDATE_FOUND=$?
 
-                    if [[ $DOCSFIX_UPDATE_FOUND == "0" ]];
+                    if [[ $DOCFIX_UPDATE_FOUND == "0" ]];
                     then
                       UPDATE_TYPE_1=none
-                      UPDATE_TYPE_2=docsfix
+                      UPDATE_TYPE_2=docfix
                     else
                       echo "|"
                       echo "| Error: Invalid commit message"
                       echo "|"
                       echo "| Commit message must follow the format '<type>/<message>'."
-                      echo "| Where 'type' can be feat-ma, feat-mi, bugfix, hotfix or docsfix."
+                      echo "| Where 'type' can be feat-ma, feat-mi, bugfix, hotfix or docfix."
                       echo "|"
                     fi
                   fi
@@ -389,8 +341,8 @@ jobs:
 
       ###############################################################
       # UPDATE CHANGELOG
-      ###############################################################
-      - name: Update Changelog
+      ###############################################################  
+      - name: Update changelog
         id: update-changelog
         if: ${{ steps.define-update-type.outcome == 'success' }}
         run: |
@@ -415,8 +367,11 @@ jobs:
                 CHANGELOG_HEADING="Patch (Hotfix)"
                 CHANGELOG_MESSAGE=$(echo "${{ env.COMMIT_MESSAGE_2 }}" | sed -e "s|hotfix/||")
               else
-                CHANGELOG_HEADING="Docsfix"
-                CHANGELOG_MESSAGE=$(echo "${{ env.COMMIT_MESSAGE_2 }}" | sed -e "s|docsfix/||")
+                LAST_NON_DOCFIX_COMMIT_MESSAGE=$(git log --pretty=format:"%s" | grep -v "docfix" | head -n 1)
+
+                CHANGELOG_HEADING="Docfix"
+                CHANGELOG_MESSAGE_1=$(echo "Docfix for $LAST_NON_DOCFIX_COMMIT_MESSAGE")
+                CHANGELOG_MESSAGE_2=$(echo "${{ env.COMMIT_MESSAGE_2 }}" | sed -e "s|docfix/||")
               fi
             fi
 
@@ -425,40 +380,85 @@ jobs:
             echo CHANGELOG_MESSAGE=$CHANGELOG_MESSAGE
             echo ""                  
           }
+ 
+          update_changelog_non_docfix() {
+            ls | grep CHANGELOG
+            CHANGELOG_FOUND=$?
+
+            if [[ $CHANGELOG_FOUND == "0" ]];
+            then
+              cat >> /tmp/CHANGELOG.md<< EOF
+            # Changelog
+
+            All notable changes to this module will be documented in this file.
+
+            ## $CHANGELOG_HEADING ($DATE)
+            * $CHANGELOG_MESSAGE
+
+            EOF
+
+              cp CHANGELOG.md /tmp/CHANGELOG-2.md
+              sed -i '1,4d' /tmp/CHANGELOG-2.md
+              echo "$(cat /tmp/CHANGELOG-2.md)" >> /tmp/CHANGELOG.md
+              cat /tmp/CHANGELOG.md
+              mv /tmp/CHANGELOG.md CHANGELOG.md
+            else
+              cat >> CHANGELOG.md<< EOF
+            # Changelog
+
+            All notable changes to this module will be documented in this file.
+
+            ## $CHANGELOG_HEADING ($DATE)
+            * $CHANGELOG_MESSAGE
+
+            EOF
+            fi
+          }
+
+          update_changelog_docfix() {
+            ls | grep CHANGELOG
+            CHANGELOG_FOUND=$?
+
+            if [[ $CHANGELOG_FOUND == "0" ]];
+            then
+              cat >> /tmp/CHANGELOG.md<< EOF
+            # Changelog
+
+            All notable changes to this module will be documented in this file.
+
+            ## $CHANGELOG_HEADING ($DATE)
+            * $CHANGELOG_MESSAGE_1
+            * $CHANGELOG_MESSAGE_2
+
+            EOF
+
+              cp CHANGELOG.md /tmp/CHANGELOG-2.md
+              sed -i '1,4d' /tmp/CHANGELOG-2.md
+              echo "$(cat /tmp/CHANGELOG-2.md)" >> /tmp/CHANGELOG.md
+              cat /tmp/CHANGELOG.md
+              mv /tmp/CHANGELOG.md CHANGELOG.md
+            else
+              cat >> CHANGELOG.md<< EOF
+            # Changelog
+
+            All notable changes to this module will be documented in this file.
+
+            ## $CHANGELOG_HEADING ($DATE)
+            * $CHANGELOG_MESSAGE_1
+            * $CHANGELOG_MESSAGE_2
+
+            EOF
+            fi
+          }
 
           set +e
           generate_changelog_message
 
-          ls | grep CHANGELOG
-          CHANGELOG_FOUND=$?
-
-          if [[ $CHANGELOG_FOUND == "0" ]];
+          if [[ ${{ env.UPDATE_TYPE_2 }} != "docfix" ]];
           then
-            cat >> /tmp/CHANGELOG.md<< EOF
-          # Changelog
-
-          All notable changes to this module will be documented in this file.
-
-          ## $CHANGELOG_HEADING ($DATE)
-          * $CHANGELOG_MESSAGE
-
-          EOF
-
-            cp CHANGELOG.md /tmp/CHANGELOG-2.md
-            sed -i '1,4d' /tmp/CHANGELOG-2.md
-            echo "$(cat /tmp/CHANGELOG-2.md)" >> /tmp/CHANGELOG.md
-            cat /tmp/CHANGELOG.md
-            mv /tmp/CHANGELOG.md CHANGELOG.md
+            update_changelog_non_docfix
           else
-            cat >> CHANGELOG.md<< EOF
-          # Changelog
-
-          All notable changes to this module will be documented in this file.
-
-          ## $CHANGELOG_HEADING ($DATE)
-          * $CHANGELOG_MESSAGE
-
-          EOF
+            update_changelog_docfix
           fi
           set -e
 
@@ -473,41 +473,5 @@ jobs:
           git add .
           git commit -m ${{ env.COMMIT_MESSAGE_3 }}
           git push origin
-
-      ###############################################################
-      # NOTIFY SLACK CHANNEL (SUCCESS)
-      ############################################################### 
-      - name: Notify Slack Channel Success
-        id: notify-slack-channel-success
-        if: ${{ steps.commit-and-push-updates.outcome == 'success' }}
-        uses: slackapi/slack-github-action@v2.1.0
-        with:
-          method: chat.postMessage
-          token: ${{ env.SLACK_GHA_NOTIFY_BOT_TOKEN }}
-          payload: |
-            channel: ${{ env.SLACK_CHANNEL_ID }}
-            text: |
-              New repo commit:
-              Commit author:          ${{ github.actor }}  
-              Commit Message:        ${{ env.COMMIT_MESSAGE_2 }}
-              Commit CICD status:   ${{ job.status }} :white_check_mark: :clap:
-
-      ###############################################################
-      # NOTIFY SLACK CHANNEL (FAILURE)
-      ############################################################### 
-      - name: Notify Slack Channel Failure
-        id: notify-slack-channel-failure
-        if: ${{ steps.commit-and-push-updates.outcome == 'failure' }}
-        uses: slackapi/slack-github-action@v2.1.0
-        with:
-          method: chat.postMessage
-          token: ${{ env.SLACK_GHA_NOTIFY_BOT_TOKEN }}
-          payload: |
-            channel: ${{ env.SLACK_CHANNEL_ID }}
-            text: |
-              New repo commit:
-              Commit author:          ${{ github.actor }}  
-              Commit Message:        ${{ env.COMMIT_MESSAGE_2 }}
-              Commit CICD status:   ${{ job.status }} :x: :cold_sweat:
 
 ######################################## APACHEPLAYGROUND™ ########################################
